@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+    <head><title>jslab</title></head>
+    <style>body {
+        text-align: center;
+        background-color: rgb(53, 53, 53);        
+      }
+      canvas {
+        border: 5px solid #000;
+        background-color: white;
+        height: 90vh;
+        width: 100%;
+      }</style>
+    <body >
+        <div id="root">
+            <canvas id="myCanvas" width="256" height="192" >
+            </canvas>
+          </div>
+    </body>
+
+    <script >
+        const canvas=document.querySelector('canvas');
+        const ctx=canvas.getContext('2d');
+        ctx.webkitImageSmoothingEnabled = false; 
+        ctx.mozImageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled=false;
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var cursorX=0,cursorY=0;
+        var cursorBlink=false;
+        var bPausa=false;
+
+        //sp=32,a=65
+        var pixels = imageData.data;
+        var colores=[[31,31,31],[0,0,255],[255,0,0],[255,0,255],[0,255,0],[0,255,255],[255,255,0],[191,191,191],
+                     [0,0,0],[0,0,127],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[127,127,127],
+                     [127,127,127],[127,127,255],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[255,255,255]];
+        var ink=1;paper=6;shadow=5; 
+        var cursorColor1=1, cursorColor2=14, cursorEnable=true, cursorBlinking=false;
+        var programa=[];//array de arrays de lineas de codigo, cada array es un sub
+        var subs=[];// nombres de las subrutinas
+        var sub=[]; //sub en edición
+        var bSubEnEdicion=false;
+        
+        
+        var command = '';
+        var fonts=[,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'                                                                ', //32-espacio
+                   '           X-      X-      X-      X-              X-           ',  //33-!
+                   '         X-  X-  X-  X-  X-  X-                                 ',  //34-"
+                   '          X-X-   XXXXX-   X-X-   XXXXX    X-X-                  ',  //35-#
+                   '           X-    XXXXX-  X-X-    XXXXX-    X-X-  XXXXX-    X    ',  //36-$
+                   '         XX- X-  XX-X-     X-     X-XX-  X- XX-                 ',  //37-%
+                   '           X-     X-X-     X-     X-X-X- X-  X-   XXX-X-        ',  //38-&
+                   '            X-     X-                                           ',  //39-'
+                   '   X-     X-      X-      X-      X-       X-                   ',  //40-(
+                   '           X-       X-      X-      X-      X-     X-           ',  //41-)
+                   '          X-X-     X-    XXXXX     X-     X-X-                  ',  //42-*
+                   '           X-      X-    XXXXX-    X-      X-                   ',  //43-+
+                   '                                            X-     X-           ',  //44-,
+                   '                         XXXXX-                                 ',  //45--
+                   '                                           XX-     XX-          ',  //46-.
+                   '              X-     X-     X-     X-     X-     X-             ',  //47-/
+                   '          XXX-   X- XX-  X-X-X-  XX- X-  X-  X-   XXX-          ', //48- 0
+                   '           X-     XX-      X-      X-      X-     XXX           ', //49- 1
+                   '          XXX-   X-  X-      X-   XXX-   X-      XXXXX-         ', //50-2
+                   '          XXX-   X-  X-    XX-       X-  X-  X-   XXX-          ',
+                   '            X-     XX-    X-X-   XXXXX-     X-      X-          ',
+                   '         XXXXX   X-      XXXX-       X-  X-  X-   XXX-          ',
+                   '          XXX-   X-      XXXX-   X-  X-  X-  X-   XXX-          ',
+                   '         XXXXX-      X-     X-     X-      X-      X-           ',
+                   '          XXX-   X-  X-   XXX-   X-  X-  X-  X-   XXX-          ', // 8
+                   '          XXX-   X-  X-   XXXX-      X-  X-  X-   XXX-          ', // 9
+                   '                           X-                      X-           ', // : 
+                   '                   X-              X-      X-     X-            ', // ;
+                   '           X-     X-     X-       X-       X-                   ', // <
+                   '                         XXXXX-          XXXXX-                 ', // =
+                   '          X-       X-       X-     X-     X-                    ', //62->
+                   '          XXX-   X-  X-      X-     X-     X-              X-   ', //63-?
+                   '          XXXX-  X- X-X- X-X-XX- X-XXXX- X-       XXXX-         ', //64-@
+                   '          XXX-   X-  X-  XXXXX-  X-  X-  X-  X-  X-  X-         ', //65-A
+                   '         XXXX-   X-  X-  XXXX-   X-  X-  X-  X-  XXXX-          ', //66-B
+                   '          XXX-   X-  X-  X-      X-      X-  X-   XXX-          ', //67-C
+                   '         XXXX-   X-  X-  X-  X-  X-  X-  X-  X-  XXXX-          ',
+                   '         XXXXX-  X-      XXXX-   X-      X-      XXXXX-         ',
+                   '         XXXXX-  X-      XXXX-   X-      X-      X-             ',
+                   '          XXX-   X-  X-  X-      X- XX-  X-  X-   XXX-          ',
+                   '         X-  X-  X-  X-  XXXXX-  X-  X-  X-  X-  X-  X-         ',
+                   '         XXXXX-    X-      X-      X-      X-    XXXXX-         ',
+                   '         XXXXX-      X-      X-      X-  X-  X-   XXX-          ',
+                   '         X-  X-  X- X-   X-X-    XX-X-   X-  X-  X-  X-         ',
+                   '         X-      X-      X-      X-      X-      XXXXX-         ',
+                   '         X-  X-  XX-XX-  X-X-X-  X-  X-  X-  X-  X-  X-         ',
+                   '         X-  X-  XX- X-  X-X-X-  X- XX-  X-  X-  X-  X-         ',
+                   '          XXX-   X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ',
+                   '         XXXX-   X-  X-  XXXX-   X-      X-      X-             ',
+                   '          XXX-   X-  X-  X-  X-  X-  X-  X- XX-   XX-X-         ',
+                   '         XXXX-   X-  X-  XXXX-   X-  X-  X-  X-  X-  X-         ',
+                   '          XXX-   X-       XXX-       X-  X-  X-   XXX-          ',
+                   '         XXXXXX-   X-      X-      X-      X-      X-           ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-   X-X-     X-           ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-  X-X-X-   X-X-          ',
+                   '         X-  X-   X-X-     X-     X-X-   X-  X-  X-  X-         ',
+                   '         X-  X-  X-  X-   XXX-     X-      X-      X-           ', //Y
+                   '         XXXXXX-     X-     X-     X-     X-     XXXXXX-        ', //Z
+                   '         XXXX-   X-      X-      X-      X-      XXXX-          ', //[
+                   '         X-       X-       X-       X-       X-       X-        ', //\
+                   '          XXXX-      X-      X-      X-      X-   XXXX-         ', //]
+                   '   X-     XXX-   X-X-X-    X-      X-      X-                   ', //†
+                   '                                                XXXXXXXX        ', //_
+                   '           XXX-   X-  X- XXXX-    X-      X-     XXXXX-         ', // £
+                   '                  XXX-       X-   XXXX-  X-  X-   XXXXX-        ', //a
+                   ' X-      X-      XXXX-   X-  X-  X-  X-  X-  X-  XXXX-          ', //b
+                   '                  XXXX-  X-      X-      X-       XXXX-         ', //c
+                   '     X-      X-   XXXX-  X-  X-  X-  X-  X-  X-   XXXX-         ', //d
+                   '                  XXX-   X-  X-  XXXXX-  X-       XXX-          ', //e
+                   '                   XXX-   X-      XXX-    X-      X-            ', //f
+                   '                  XXX-   X-  X-   XXXX-      X-   XXX-          ', //g
+                   '         X-      X-      XXXX-   X-  X-  X-  X-  X-  X-         ', //h
+                   '           X-             XX-      X-      X-     XXXX-         ', //i
+                   '             X-              X-      X-  X-  X-   XXX-          ', //j
+                   '                 X-      X- X-   XXX-    X- X-   X-  X-         ', //k
+                   '                  X-      X-      X-      X-       XX-          ', //l
+                   '                 XXXX-   X-X-X-  X-X-X-  X-X-X-  X-X-X-         ', //m
+                   '                 XXXX-   X-  X-  X-  X-  X-  X-  X-  X-         ', //n
+                   '                  XXX-   X-  X-  X-  X-  X-  X-   XXX-          ', //o
+                   '                 XXXX-   X-  X-  X-  X-  XXXX-   X-      X-     ', //p
+                   '                  XXXX-  X-  X-  X-  X-   XXXX-      X-      XX-', //q
+                   '                   XXX-   X-      X-      X-      X-            ', //r
+                   '                  XXX-   X-       XXX-       X-   XXX-          ', //s
+                   '           X-     XXX-     X-      X-      X-       XX-         ', //t
+                   '                 X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ', //u
+                   '                 X-  X-  X-  X-  X-  X-   X-X-     X-           ', //v
+                   '                 X-  X-  X-  X-  X-X-X-  X-X-X-   X-X-          ', //w
+                   '                 X-  X-   X-X-     X-     X-X-   X-  X-         ', //x
+                   '                 X-  X-  X-  X-   XXXX-      X-   XXX-          ', //y
+                   '                 XXXX-      X-     X-     X-     XXXX-          ', //z
+                   '          XXXX-   X-     X-       X-      X-      XXXX-         ', //{
+                   '           X-      X-      X-      X-      X-      X-           ', //|
+                   '         XXXX-      X-       X-     X-      X-   XXXX-          ', //}
+                   '          XX- X- X- XX-                                         ', //~
+                   '  XXX-   X-  X- X- XX-X-X-X-  X-X- XX-X- X-  X-   XXX-          ', //®
+                  ];        
+
+
+        function splitQuot(s){
+        // convierte string s en array pero mantiene lo que hay dentro de comillas junto: palabra1 palabra2 "dos palabras" ==> array de 3
+            //The parenthesis in the regex creates a captured group within the quotes
+            var myRegexp = /[^\s"]+|"([^"]*)"/gi;
+            //var myString = 'single words "fixed string of words"';
+            var myArray = [];
+
+            do {
+                //Each call to exec returns the next regex match as an array
+                var match = myRegexp.exec(s);
+                if (match != null)
+                {
+                    //Index 1 in the array is the captured group if it exists
+                    //Index 0 is the matched text, which we use if no captured group exists
+                    myArray.push(match[1] ? match[1] : match[0]);
+                }
+            } while (match != null);    
+            console.log(myArray)
+            return myArray;        
+        }
+
+
+        function getPixel(x, y) {
+        // retorna el color de un pixel en pantalla
+            "use strict";
+            var index = 0, r, g, b;
+            index = (x + y * imageData.width) * 4;
+            r = imageData.data[index];
+            g = imageData.data[index + 1];
+            b = imageData.data[index + 2];
+
+            return [r, g, b];
+        }
+
+        function setPixel(x, y, rgb) {
+        // pinta un pixel en pantalla cambiando imageData, no se hace visible hasta que se hace putImage, ver animate()
+            "use strict";
+            var index = 0;
+            index = (x + y * imageData.width) * 4;
+            imageData.data[index]     = rgb[0];
+            imageData.data[index + 1] = rgb[1];
+            imageData.data[index + 2] = rgb[2];
+            imageData.data[index + 3] = 255;
+        }
+
+        function dibujaChar(xx,yy,cod,cink,cpaper,cshadow){   //hace el char pero no avanza
+        var x=xx*8,y=yy*8;            
+        if (cod>31) 
+            if (fonts[cod])
+                for (var i=0;i<64;i++){                    
+                    if (fonts[cod].charAt(i)=='X') 
+                        setPixel(x,y,cink)
+                    else 
+                        if (fonts[cod].charAt(i)=='-') 
+                            setPixel(x,y,colores[shadow])
+                        else
+                            setPixel(x,y,colores[paper])
+                            
+                            x++;if (x==xx*8+8){x=xx*8;y++}
+                }
+            else
+                console.log('no definido codigo ',cod);
+        }
+
+        function putChar(cod){ // dibuja un char y avanza el cursor
+            dibujaChar(cursorX,cursorY,cod,colores[ink],colores[paper],colores[shadow]);
+            if (cod==13) {cursorX=32;}
+            else cursorX++;
+            if (cursorX==32) {cursorX=0;cursorY++; if(cursorY==24) {cursorY=0;cls()}}
+        }
+
+        function cursorNexLine(){
+            cursorX=0;cursorY++; if(cursorY==24) {cursorY=0;cls()}
+        }
+
+        function println(s){
+        // imprime un string en pantalla, y avanza el cursor a la siguiente linea
+            print(s);
+            cursorNexLine();
+        }
+
+        function print(s){
+        // imprime un string en pantalla
+            console.log(s)
+            for (var i=0;i<s.length;i++)  {
+                putChar(s.charCodeAt(i));
+            }
+        }
+        function beginPause(n){
+            bPausa=true;
+            if (n>0) window.setTimeout(endPause,n*1000);
+        }
+        function endPause(){
+            bPausa=false;
+        }        
+
+        function drawall(){
+            //ctx.clearRect(0,0,canvas.with,canvas.height);
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function cls()
+        {   
+            cursorX=0;cursorY=0;
+            print( 
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                                " +
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                               "
+            );
+            //imprime el ultimo sin movimiento de cursor para que no se ejecute cls en ciclo
+            dibujaChar(cursorX,cursorY,32,colores[ink],colores[paper],colores[shadow]);
+            cursorX=0;cursorY=0;
+        }        
+
+        function buscaoCreaSub(n){
+            if (subs.indexOf(n)==-1) {
+                subs.push(n);
+                programa.push([]);                
+            }
+            return subs.indexOf(n);
+        }
+
+        function edit(nombreSub){
+        //editar subrutina nombreSub
+            n=buscaoCreaSub(nombreSub);
+            sub=programa[n];
+            showcode(sub);
+            bSubEnEdicion=true;
+            cursorColor1=6;cursorColor2=0;
+        }
+        function finalizaEdit(){
+            bSubEnEdicion=false;
+            cursorColor1=1;cursorColor2=14;            
+        }
+        function showcode(sub){
+            sub.forEach(element => println(element));
+        }
+    
+        function list(nombreSub){
+            console.log('prog',programa,'sub',sub,'subs',subs);
+            n=buscaoCreaSub(nombreSub);
+            sub=programa[n];
+            println('');
+            println('sub '+nombreSub);
+            showcode(sub);
+            println('end sub')
+        }
+        function listSubs(){            
+            println('')
+            subs.forEach(element => println('sub '+element));
+        }
+        function runNextLine(){
+        // ejecuta sub[] indice:linea
+            if (bPausa){
+                console.log('** no ejecutó por pausa ** ')
+                window.setTimeout(runNextLine,500)
+            } 
+            else {
+                console.log('linea:',linea)
+                ejecutar(tokenizar(sub[linea]));
+                linea++;
+                if (linea<sub.length)
+                {
+                    window.setTimeout(runNextLine,1);
+                } else console.log('fin ejecución');
+            }   
+        }
+
+
+        function runStart(subname){
+            //console.log('sub?',subname)
+            //busca el sub a ejecutar //si puso sólo RUN, recibe main
+            n=subs.indexOf(subname);
+            if (n==-1) println('ERROR:'+subname+' no encontrado')
+            else {
+                sub=programa[n];                
+                linea=0;
+                // se ejecutan las lineas de a una, usando variable sub y linea
+                window.setTimeout(runNextLine,1);                
+            }
+        }
+
+        function secondOr(t,def){ 
+        //retorna el segundo elemento, pero si no existe retorna def             
+            if(t.length<=1) 
+                return def
+            else 
+                return t[1];             
+        }
+
+        function nop(){} //el enter no hace nada
+        function help(){
+            ink=5;paper=7;shadow=0;
+            cls()
+            paper=5; ink=8; shadow=8;
+
+            print( " * COMANDOS BASIC IMPELENTADOS *");
+            paper=15; ink=1; shadow=3;
+            print( " HELP - muestra esta pantalla   ");
+            print( " INK n  -cambia color de tinta  ");
+            print( " PAPER n -cambia color de fondo ");
+            print( " SHADOW n -cambia color sombra  ");
+            print( " LIST [sub] -muestra programa   ");
+            print( " CLS  -borra la pantalla        ");
+            print( " PRINT [algo] -muestra un texto ");
+            print( " SUB nombre   -crea sub programa");
+            print( " RUN [nom] - ejecuta programa   ");
+            print( " PAUSE [t] - pausa en segundos  ");
+            print( "                                ");            
+            ink=5;paper=7;shadow=0;
+        }
+
+        function ejecutar(t){
+            var ejec='';
+            if (t.length>0) ejec=t[0].toLowerCase();
+
+            if (ejec=="") nop
+            else
+            if (ejec=="paper") paper=Number.parseInt(t[1])
+            else
+            if (ejec=="ink") ink=Number.parseInt(t[1])
+            else
+            if (ejec=="shadow") shadow=Number.parseInt(t[1])
+            else
+            if (ejec=="cls") cls()
+            else
+            if (ejec=="sub") edit(t[1])
+            else
+            if (ejec=="list") { if(t[1]) list(t[1]) 
+                                else listSubs()}
+            else
+            if (ejec=="print") {print(secondOr(t,''))}
+            else
+            if (ejec=="println") {println(secondOr(t,''))}
+            else
+            if (ejec=="run" || ejec=="call"){runStart(secondOr(t,'main'))}
+            else
+            if (ejec=="pause"){beginPause(secondOr(t,0))}
+            else
+            if (ejec=="help") help()
+            else                                                    
+                runStart(t[0]);
+        }
+
+        function tokenizar(s){
+            return splitQuot(s); //s.split(" ");
+        }
+
+        function onKeypressExecute(e){
+            if (bPausa) endPause();
+            if (e.key=='Enter') {
+                if (bSubEnEdicion) {
+                    if (command.toLowerCase()=="end sub") finalizaEdit();
+                    else sub.push(command);
+                    putChar(e.charCode)
+                } else {                    
+                    cursorNexLine(); 
+                    ejecutar(tokenizar(command))
+                }
+                command='';                
+            } else {
+                command+=e.key;
+                putChar(e.charCode)
+            }            
+        }
+
+        function rollbackchar(){
+            cursorX--;if(cursorX==-1) {cursorX=31;cursorY--;if(cursorY==-1){ cursorY=0;cursorX=0}}
+        }
+
+        function onKeydownExecute(){
+            cursorEnable=false;
+            dibujaChar(cursorX,cursorY,32,colores[cursorColor2],colores[cursorColor1],colores[cursorColor2]);                    
+        }
+
+        function onKeyupExecute(e){
+            if (e.key=='Backspace') {
+                rollbackchar();
+                putChar(32);
+                rollbackchar();
+                command=command.substring(0,command.length-1)
+            }
+            cursorEnable=true;
+        }
+
+        function onCursorBlink(){
+            if (cursorEnable){                
+                cursorBlinking=!cursorBlinking;
+                if (cursorBlinking){
+                    dibujaChar(cursorX,cursorY,95,colores[cursorColor1],colores[cursorColor2],colores[cursorColor1])                    
+                }
+                else {
+                    dibujaChar(cursorX,cursorY,95,colores[cursorColor2],colores[cursorColor1],colores[cursorColor2]);                    
+                }
+            } 
+        }
+
+        window.onload=setInterval(drawall,1000/30); 
+        window.onkeypress=onKeypressExecute;
+        window.onkeydown=onKeydownExecute;
+        window.onkeyup=onKeyupExecute;
+        setInterval(onCursorBlink,400);
+
+        shadow=0;ink=5;paper=7;flash=0;
+        cls();
+        ink=2; paper=6; shadow=0;
+        print(' MINI BASIC - LuisAntonioVazquez');
+        ink=1; paper=7; println('type help for commands');
+
+        shadow=0;ink=5;paper=7;flash=0;
+                
+    </script>
+</html>
