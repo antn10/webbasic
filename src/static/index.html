@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+    <head><title>webBASIC - LAVazquez 2021</title></head>
+    <style>body {
+        text-align: center;
+        background-color: rgb(53, 53, 53);        
+      }
+      canvas {
+        border: 5px solid #000;
+        background-color: white;
+        height: 90vh;        
+      }</style>
+    <body >
+        <div id="root">
+            <canvas id="myCanvas" width="256" height="192" >
+            </canvas>
+          </div>
+    </body>
+
+    <script >
+        const canvas=document.querySelector('canvas');
+        const ctx=canvas.getContext('2d');
+        ctx.webkitImageSmoothingEnabled = false; 
+        ctx.mozImageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled=false;
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var cursorX=0,cursorY=0;
+        var cursorBlink=false;
+        var bPausa=false;
+        var bBubble=true; // si un sub se llama igual a comando ejecuta los dos a menos que el sub ponga buble=false
+        //sp=32,a=65
+        var pixels = imageData.data;
+        var colores=[[31,31,31],[0,0,255],[255,0,0],[255,0,255],[0,255,0],[0,255,255],[255,255,0],[191,191,191],
+                     [0,0,0],[0,0,127],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[127,127,127],
+                     [127,127,127],[127,127,255],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[255,255,255]];
+        var ink=1;paper=6;shadow=5; 
+        var cursorColor1=1, cursorColor2=14, cursorEnable=true, cursorBlinking=false;
+        var programa=[];//array de arrays de lineas de codigo, cada array es un sub
+        var subs=[];// nombres de las subrutinas
+        var sub=[]; //sub en edición
+        var bSubEnEdicion=false;
+        var stackArray=[{}];
+        var callStack=[];//pop cuando se llama un método
+        var stackPoints=[];//para uso dentro de un método en loops
+        var stackPCounter=[];
+        
+        var command = '';
+        var fonts=[,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'                                                                ', //32-espacio
+                   '           X-      X-      X-      X-              X-           ',  //33-!
+                   '         X-  X-  X-  X-  X-  X-                                 ',  //34-"
+                   '          X-X-   XXXXX-   X-X-   XXXXX    X-X-                  ',  //35-#
+                   '           X-    XXXXX-  X-X-    XXXXX-    X-X-  XXXXX-    X    ',  //36-$
+                   '         XX- X-  XX-X-     X-     X-XX-  X- XX-                 ',  //37-%
+                   '           X-     X-X-     X-     X-X-X- X-  X-   XXX-X-        ',  //38-&
+                   '            X-     X-                                           ',  //39-'
+                   '   X-     X-      X-      X-      X-       X-                   ',  //40-(
+                   '           X-       X-      X-      X-      X-     X-           ',  //41-)
+                   '          X-X-     X-    XXXXX     X-     X-X-                  ',  //42-*
+                   '           X-      X-    XXXXX-    X-      X-                   ',  //43-+
+                   '                                            X-     X-           ',  //44-,
+                   '                         XXXXX-                                 ',  //45--
+                   '                                           XX-     XX-          ',  //46-.
+                   '              X-     X-     X-     X-     X-     X-             ',  //47-/
+                   '          XXX-   X- XX-  X-X-X-  XX- X-  X-  X-   XXX-          ', //48- 0
+                   '           X-     XX-      X-      X-      X-     XXX           ', //49- 1
+                   '          XXX-   X-  X-      X-   XXX-   X-      XXXXX-         ', //50-2
+                   '          XXX-   X-  X-    XX-       X-  X-  X-   XXX-          ', //51
+                   '            X-     XX-    X-X-   XXXXX-     X-      X-          ', //52
+                   '         XXXXX   X-      XXXX-       X-  X-  X-   XXX-          ', //53
+                   '          XXX-   X-      XXXX-   X-  X-  X-  X-   XXX-          ', //54
+                   '         XXXXX-      X-     X-     X-      X-      X-           ', //55
+                   '          XXX-   X-  X-   XXX-   X-  X-  X-  X-   XXX-          ', //56- 8
+                   '          XXX-   X-  X-   XXXX-      X-  X-  X-   XXX-          ', //57- 9
+                   '                           X-                      X-           ', //58- : 
+                   '                   X-              X-      X-     X-            ', //59- ;
+                   '           X-     X-     X-       X-       X-                   ', //60- <
+                   '                         XXXXX-          XXXXX-                 ', //61- =
+                   '          X-       X-       X-     X-     X-                    ', //62->
+                   '          XXX-   X-  X-      X-     X-     X-              X-   ', //63-?
+                   '          XXXX-  X- X-X- X-X-XX- X-XXXX- X-       XXXX-         ', //64-@
+                   '          XXX-   X-  X-  XXXXX-  X-  X-  X-  X-  X-  X-         ', //65-A
+                   '         XXXX-   X-  X-  XXXX-   X-  X-  X-  X-  XXXX-          ', //66-B
+                   '          XXX-   X-  X-  X-      X-      X-  X-   XXX-          ', //67-C
+                   '         XXXX-   X-  X-  X-  X-  X-  X-  X-  X-  XXXX-          ',
+                   '         XXXXX-  X-      XXXX-   X-      X-      XXXXX-         ',
+                   '         XXXXX-  X-      XXXX-   X-      X-      X-             ',
+                   '          XXX-   X-  X-  X-      X- XX-  X-  X-   XXX-          ',
+                   '         X-  X-  X-  X-  XXXXX-  X-  X-  X-  X-  X-  X-         ',
+                   '         XXXXX-    X-      X-      X-      X-    XXXXX-         ',
+                   '         XXXXX-      X-      X-      X-  X-  X-   XXX-          ',
+                   '         X-  X-  X- X-   X-X-    XX-X-   X-  X-  X-  X-         ',
+                   '         X-      X-      X-      X-      X-      XXXXX-         ',
+                   '         X-  X-  XX-XX-  X-X-X-  X-  X-  X-  X-  X-  X-         ',
+                   '         X-  X-  XX- X-  X-X-X-  X- XX-  X-  X-  X-  X-         ',
+                   '          XXX-   X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ',
+                   '         XXXX-   X-  X-  XXXX-   X-      X-      X-             ',
+                   '          XXX-   X-  X-  X-  X-  X-  X-  X- XX-   XX-X-         ',
+                   '         XXXX-   X-  X-  XXXX-   X-  X-  X-  X-  X-  X-         ',
+                   '          XXX-   X-       XXX-       X-  X-  X-   XXX-          ',
+                   '         XXXXXX-   X-      X-      X-      X-      X-           ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-   X-X-     X-           ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-  X-X-X-   X-X-          ',
+                   '         X-  X-   X-X-     X-     X-X-   X-  X-  X-  X-         ',
+                   '         X-  X-  X-  X-   XXX-     X-      X-      X-           ', //Y
+                   '         XXXXXX-     X-     X-     X-     X-     XXXXXX-        ', //Z
+                   '         XXXX-   X-      X-      X-      X-      XXXX-          ', //[
+                   '         X-       X-       X-       X-       X-       X-        ', //\
+                   '          XXXX-      X-      X-      X-      X-   XXXX-         ', //]
+                   '   X-     XXX-   X-X-X-    X-      X-      X-                   ', //†
+                   '                                                XXXXXXXX        ', //_
+                   '           XXX-   X-  X- XXXX-    X-      X-     XXXXX-         ', // £
+                   '                  XXX-       X-   XXXX-  X-  X-   XXXXX-        ', //a
+                   ' X-      X-      XXXX-   X-  X-  X-  X-  X-  X-  XXXX-          ', //b
+                   '                  XXXX-  X-      X-      X-       XXXX-         ', //c
+                   '     X-      X-   XXXX-  X-  X-  X-  X-  X-  X-   XXXX-         ', //d
+                   '                  XXX-   X-  X-  XXXXX-  X-       XXX-          ', //e
+                   '                   XXX-   X-      XXX-    X-      X-            ', //f
+                   '                  XXX-   X-  X-   XXXX-      X-   XXX-          ', //g
+                   '         X-      X-      XXXX-   X-  X-  X-  X-  X-  X-         ', //h
+                   '           X-             XX-      X-      X-     XXXX-         ', //i
+                   '             X-              X-      X-  X-  X-   XXX-          ', //j
+                   '                 X-      X- X-   XXX-    X- X-   X-  X-         ', //k
+                   '                  X-      X-      X-      X-       XX-          ', //l
+                   '                 XXXX-   X-X-X-  X-X-X-  X-X-X-  X-X-X-         ', //m
+                   '                 XXXX-   X-  X-  X-  X-  X-  X-  X-  X-         ', //n
+                   '                  XXX-   X-  X-  X-  X-  X-  X-   XXX-          ', //o
+                   '                 XXXX-   X-  X-  X-  X-  XXXX-   X-      X-     ', //p
+                   '                  XXXX-  X-  X-  X-  X-   XXXX-      X-      XX-', //q
+                   '                   XXX-   X-      X-      X-      X-            ', //r
+                   '                  XXX-   X-       XXX-       X-   XXX-          ', //s
+                   '           X-     XXX-     X-      X-      X-       XX-         ', //t
+                   '                 X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ', //u
+                   '                 X-  X-  X-  X-  X-  X-   X-X-     X-           ', //v
+                   '                 X-  X-  X-  X-  X-X-X-  X-X-X-   X-X-          ', //w
+                   '                 X-  X-   X-X-     X-     X-X-   X-  X-         ', //x
+                   '                 X-  X-  X-  X-   XXXX-      X-   XXX-          ', //y
+                   '                 XXXX-      X-     X-     X-     XXXX-          ', //z
+                   '          XXXX-   X-     X-       X-      X-      XXXX-         ', //{
+                   '           X-      X-      X-      X-      X-      X-           ', //|
+                   '         XXXX-      X-       X-     X-      X-   XXXX-          ', //}
+                   '          XX- X- X- XX-                                         ', //126 ~
+                   '                                                                ', //127®
+                   '                                                                ', //128®
+                   '                                                                ', //129®
+                   '                                                                ', //130®
+                   '                                                                ', //131®
+                   '                                                                ', //132®
+                   '                                                                ', //133®
+                   '                                                                ', //134®
+                   '                                                                ', //135®
+                   '                                                                ', //136®
+                   '                                                                ', //137®
+                   '                                                                ', //138®
+                   '                                                                ', //139®
+                   '                                                                ', //140®
+                   '                                                                ', //141®
+                   '                                                                ', //142®
+                   '                                                                ', //143®
+                   '                                                                ', //144®
+                   '                                                                ', //145®
+                   '                                                                ', //146®
+                   '                                                                ', //147®
+                   '                                                                ', //148®
+                   '                                                                ', //149®
+                   '                                                                ', //150®
+                   '                                                                ', //151®
+                   '                                                                ', //152®
+                   '                                                                ', //153®
+                   '                                                                ', //154®
+                   '                                                                ', //155®
+                   '                                                                ', //156®
+                   '                                                                ', //157®
+                   '                                                                ', //158®
+                   '                                                                ', //159®
+                   '                                                                ', //160®
+                   '                                                                ', //161®
+                   '               X  XXX-   X-  X-  X-  X-  X-  X-   XXX-          ', //o
+                   '                                                                ', //163®
+                   '                                                                ', //164®
+                   '                                                                ', //165®
+                   '                                                                ', //166®
+                   '                                                                ', //167®
+                   '                                                                ', //168®
+                   '                                                                ', //169®
+                  ];        
+
+        var parser= {
+            constructor(){
+                this.i=0;
+                this.s='';
+                this.status=0;
+            },
+
+            execute(cmd){
+                console.log('execute',cmd)
+                this.s=cmd;
+                this.i=0;                
+                this.parseCmd();
+            },
+
+            parseCmd(){
+                var t=tokenizar(this.s);
+                var ejec='';
+                if (t.length>0) ejec=t[0].toLowerCase();
+                if (subs.indexOf(ejec)>-1){
+                    i+=ejec.length;
+                    exprs=this.parseEXPR(',');
+                    runStart(ejec,exprs);
+                }
+
+                // se espera un nuevo comando                            
+                while (this.i<this.s.length){
+                    console.log('parseCMD',this.s.charAt(this.i),this.s.substring(this.i,this.i+4))
+                    if (this.s.substring(this.i,this.i+4)=='let ') {
+                        this.i+=4; this.parseLET();
+                    }                        
+                    if (this.s.substring(this.i,this.i+6)=='print ') {
+                        console.log('entra en parseprint')
+                        this.i+=6; this.parsePRINT();
+                    }                
+                    this.i++;        
+                }
+            },
+
+            parsePRINT(){
+                var start=this.i;
+                let valores=this.parseEXPR(';');
+                console.log('imprimir',valores);
+                valores.forEach(element => {
+                    console.log('print',element)
+                    print(element);
+                });             
+
+/*                        while (this.i<this.s.length){
+                    console.log('parsePRINT',this.s.charAt(this.i),this.i)    
+                    // calcula expresión e imprime en pantalla  
+                    if (this.i==start) {
+                        valores=this.parseEXPR(';');
+                        console.log('primero',valores)
+                        valores.forEach(element => {
+                            console.log('print',element)
+                            print(element);
+                        });                                            
+                    }
+                    if (this.s.charAt(this.i)==';') {
+                        i++; //se saltea el ;
+                        valores=this.parseEXPR(';');
+                        console.log('segundo',valores)
+                        valores.forEach(element => {
+                            console.log('print',element)
+                            print(element);
+                        });                                            
+                    }
+                    this.i++;
+                }*/
+                console.log('evalua ; final: ',this.s.charAt(this.i-1))
+
+                if (this.i>1) if (this.s.charAt(this.i-1)!=';') 
+                    cursorNexLine();
+            },
+
+
+            parseLET(){
+                var varname='';
+                var valor='';                
+                // espera nombre de variable
+                // si viene '=' 
+                //    evalúa expresión y asigna
+                while (this.i<this.s.length){
+
+                    console.log('parseLET',this.s.charAt(this.i))
+                    // hasta que llega el = toma nombre de variable
+                    if (this.s.charAt(this.i)!='=') {
+                        console.log('varname',this.s.charAt(this.i))
+                        varname+=this.s.charAt(this.i);
+                    }
+                    // luego del = viene una expresión
+                    if (this.s.charAt(this.i)=='=') {                        
+                        this.i++;
+                        //retorna lista de expresiones, para let sólo sirve el primero
+                        valor=this.parseEXPR('');
+                        console.log('LET',varname,valor)
+                        stackassign(varname,valor[0]);
+                    }
+                    this.i++;
+                }              
+            },
+
+            // expresiones validas: a)  1+2,"hola",5)   -- separador "," final ')' para llamada de función
+            //                      b)  5;"hola";:      -- separador ";" final '' para comando print
+            //                      c)  code(5)+(a*50)  -- separador ""  final '' para comando let
+            parseEXPR:function(separador,charfinal=':'){
+                var inquotes=false, operacion='œ',operando='';
+                var c='',valores=[],valor='';comienzo=this.i,subval='';
+                // 1 espera nombre de variable
+                // 2 espera '=' 
+                // 3 evalúa expresión
+                // espera nombre de variable
+                while (this.i<this.s.length && this.s.charAt(this.i)!=charfinal){
+                    //log('if',this.s.charAt(this.i),'=;',!inquotes)
+                    //console.log('parseEXPR1o',this.s.charAt(this.i),!inquotes,separador)
+                    while (this.i<this.s.length && (!(separador+charfinal).includes(this.s.charAt(this.i)) || inquotes)){
+                        //console.log('parseEXPR',this.i,this.s.charAt(this.i),'charfinal',charfinal)
+                        c=this.s.charAt(this.i);
+                        if (c=="\"") inquotes=!inquotes
+                        else
+                            if (!inquotes && c=='(' && (this.i==comienzo || 
+                                    '*/+-'.includes(this.s.charAt(this.i-1)))) {
+                                //console.log('--sub expresión:',this.i,operacion)
+                                this.i++;
+                                console.log('antes parse operacion es',operacion)
+                                let valores=this.parseEXPR('',')');
+                                valor=valores[0];                                
+                                c=this.s.charAt(this.i); 
+                                console.log('despues parse valor es',valor)
+                                if (operacion!='œ') { // si tiene operación pendiente la realiza
+                                    valor=calcula(operacion,operando,valor); 
+                                    operacion='œ';operando='';
+                                }
+                                else console.log('retorno',valor,c,operacion);
+                                
+                                console.log('resultado de subexpresión:',valor,operacion)                                    
+                            } else
+                            if (!inquotes && '+-*/'.includes(c)){
+                                // si tiene una operación pendiente la finaliza
+                                if (operacion!='œ') {
+                                    valor=calcula(operacion,operando,valor);                                                                        
+                                }
+                                // se inicializa la nueva operación
+                                operacion=c; operando=valor; valor='';
+                                //console.log('inicializa operacion',operando,operacion)
+                            } else
+                            if (inquotes || c!=' ') // procesa todo entre comillas, sin comillas se saltea el espacio
+                                valor+=c; 
+                            this.i++;
+                            //console.log('2do +1',this.i)
+                    }
+                    if (operacion=='œ') 
+                        if (!inquotes) valor=stackget(valor);
+                    else
+                    {
+                        res=calcula(operacion,operando,valor);
+                        //console.log('operacion final',operando,operacion,valor,'=',res,this.i,this.s.charAt(this.i))
+                        valor=res;
+                            //console.log('se realiza operacion final',c,operando,valor,res)                            
+                    }                    
+                    valores.push(valor+'');
+                    valor='';
+                    //this.i++;
+                    if (this.s.charAt(this.i)==separador) this.i++;
+                }
+                console.log('antes de salir expresión operacion es ',operacion)
+            return valores;
+            }
+        }
+
+                  function splitQuot(s){
+        // convierte string s en array pero mantiene lo que hay dentro de comillas junto: palabra1 palabra2 "dos palabras" ==> array de 3
+            //The parenthesis in the regex creates a captured group within the quotes
+            var myRegexp = /[^\s"]+|"([^"]*)"/gi;
+            //var myString = 'single words "fixed string of words"';
+            var myArray = [];
+
+            do {
+                //Each call to exec returns the next regex match as an array
+                var match = myRegexp.exec(s);
+                if (match != null)
+                {
+                    //Index 1 in the array is the captured group if it exists
+                    //Index 0 is the matched text, which we use if no captured group exists
+                    myArray.push(match[1] ? match[1] : match[0]);
+                }
+            } while (match != null);    
+            return myArray;        
+        }
+        function splitComma(s){
+        // separa por ; en array, acepta números, variables o string entre comillas
+
+            //The parenthesis in the regex creates a captured group within the quotes
+            var myRegexp = /[^;"]+|"([^"]*)"/gi;
+            //var myString = 'single words "fixed string of words"';
+            var myArray = [];
+            var vars=stackArray[stackArray.length-1];
+
+            do {
+                //Each call to exec returns the next regex match as an array
+                var match = myRegexp.exec(s);
+                if (match != null)
+                {
+                    //Index 1 in the array is the captured group if it exists
+                    //Index 0 is the matched text, which we use if no captured group exists
+                    //val=match[1] ? match[1] : match[0];
+                    // si está entre comillas se agrega
+                    if (match[0].charAt(0)=="\"") myArray.push(match[1])
+                    else // si es un número se agrega
+                     if (isNaN(match[0])==false)  {myArray.push(match[0])}
+                     else// si es nombre de variable agrega el valor
+                        if (vars.hasOwnProperty(match[0]) ) myArray.push(vars[match[0]])
+                        else // si no no se acepta
+                          print('Error en expresion ' + match[0]);                    
+                }
+            } while (match != null);    
+            return myArray;        
+        }
+
+
+        function getPixel(x, y) {
+        // retorna el color de un pixel en pantalla
+            "use strict";
+            var index = 0, r, g, b;
+            index = (x + y * imageData.width) * 4;
+            r = imageData.data[index];
+            g = imageData.data[index + 1];
+            b = imageData.data[index + 2];
+
+            return [r, g, b];
+        }
+
+        function setPixel(x, y, rgb) {
+        // pinta un pixel en pantalla cambiando imageData, no se hace visible hasta que se hace putImage, ver animate()
+            "use strict";
+            var index = 0;
+            index = (x + y * imageData.width) * 4;
+            imageData.data[index]     = rgb[0];
+            imageData.data[index + 1] = rgb[1];
+            imageData.data[index + 2] = rgb[2];
+            imageData.data[index + 3] = 255;
+        }
+
+        function dibujaChar(xx,yy,cod,cink,cpaper,cshadow){   //hace el char pero no avanza
+        var x=xx*8,y=yy*8;            
+        if (cod>31) 
+            if (fonts[cod])
+                for (var i=0;i<64;i++){                    
+                    if (fonts[cod].charAt(i)=='X') 
+                        setPixel(x,y,cink)
+                    else 
+                        if (fonts[cod].charAt(i)=='-') 
+                            setPixel(x,y,colores[shadow])
+                        else
+                            setPixel(x,y,colores[paper])
+                            
+                            x++;if (x==xx*8+8){x=xx*8;y++}
+                }
+            else
+                console.log('no definido codigo ',cod);
+        }
+
+        function putChar(cod){ // dibuja un char y avanza el cursor
+            dibujaChar(cursorX,cursorY,cod,colores[ink],colores[paper],colores[shadow]);
+            if (cod==13) {cursorX=32;}
+            else cursorX++;
+            if (cursorX==32) {cursorX=0;cursorY++; if(cursorY==24) {cursorY=0;cls()}}
+        }
+
+        function cursorNexLine(){
+            cursorX=0;cursorY++; if(cursorY==24) {cursorY=0;cls()}
+        }
+
+        function println(s){
+        // imprime un string en pantalla, y avanza el cursor a la siguiente linea
+            print(s);
+            cursorNexLine();
+        }
+
+        function print(texto){
+        // imprime un string en pantalla 
+            let textobuff='' + texto;
+            for (var i=0;i<textobuff.length;i++)  {
+                putChar(textobuff.charCodeAt(i));
+            }                
+        }
+        function beginPause(n){
+            bPausa=true;
+            if (n>0) window.setTimeout(endPause,n*1000);
+        }
+        function endPause(){
+            bPausa=false;
+        }        
+
+        function drawall(){
+            //ctx.clearRect(0,0,canvas.with,canvas.height);
+            ctx.putImageData(imageData, 0, 0);
+            runNextLine();
+        }
+
+        function cls()
+        {   
+            cursorX=0;cursorY=0;
+            print( 
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                                " +
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                                "+
+            "                                                                                               "
+            );
+            //imprime el ultimo sin movimiento de cursor para que no se ejecute cls en ciclo
+            dibujaChar(cursorX,cursorY,32,colores[ink],colores[paper],colores[shadow]);
+            cursorX=0;cursorY=0;
+        }
+
+        function buscaoCrea(n,arr,cbCrear){
+            if (arr.indexOf(n)==-1) {
+                arr.push(n);
+                if (cbCrear) cbCrear();
+                //programa.push([]);                
+            }
+            return arr.indexOf(n);
+        }
+        function insertarPrograma(){
+            programa.push([]);
+        }
+
+        function edit(nombreSub){
+        //editar subrutina nombreSub
+            n=buscaoCrea(nombreSub,subs,insertarPrograma);
+            sub=programa[n];
+            showcode(sub);
+            bSubEnEdicion=true;
+            cursorColor1=6;cursorColor2=0;
+        }
+        function finalizaEdit(){
+            bSubEnEdicion=false;
+            cursorColor1=1;cursorColor2=14;            
+        }
+        function showcode(sub){
+            sub.forEach(element => println(element));
+        }
+    
+        function list(nombreSub){            
+            n=buscaoCrea(nombreSub,subs,insertarPrograma);
+            sub=programa[n];
+            println('');
+            println('sub '+nombreSub);
+            showcode(sub);
+            println('end sub')
+        }
+        function listSubs(){            
+            println('')
+            subs.forEach(element => println('sub '+element));
+        }
+        function runNextLine(){
+        // ejecuta sub[] indice: stackPCounter[stackPCounter.length-1]
+            if (!bPausa) 
+                // ejecutar si hay algo en el callstack
+                if (callStack.length>0){
+                    var pcl=stackPCounter.length-1;
+                    var linea=stackPCounter[pcl];
+                    if (linea==sub.length){
+                        //fin de ejecución. recupera método anterior del stack
+                        console.log('fin ejecución:',linea,'sub',sub,'callstack',callStack,'stackarray',stackArray,'pcounter',stackPCounter,'pclength',stackPCounter.length)
+                        callStack.pop();
+                        n=subs.indexOf(callStack[callStack.length-1]);
+                        sub=programa[n];
+                        stackPCounter.pop();
+                        stackArray.pop();   
+                        console.log('recupera stack:','sub',sub,'callstack',callStack,'stackarray',stackArray,'pcounter',stackPCounter)
+                    } else {
+                        console.log('linea',linea,'ejecutar',tokenizar(sub[linea]),'sub',sub,'callstack',callStack,'stackarray',stackArray,'pcounter',stackPCounter,'pclength',stackPCounter.length)
+                        ejecutar(tokenizar(sub[linea]),sub[linea]);
+                        //linea++; 
+                        stackPCounter[pcl]++; 
+                    }
+                }   
+        }
+
+
+        function runStart(subname){
+            //console.log('sub?',subname)
+            // comienza a ejecutar un sub, el estado actual queda en el stackarray y callstack
+            //busca el sub a ejecutar si puso sólo RUN, recibe main
+            n=subs.indexOf(subname);
+            if (n>-1) {
+                stackArray.push({});//nuevo espacio de variables locales
+                callStack.push(subname);// nuevo nombre de subprograma a ejecutar
+                stackPCounter.push(0); //program counter para el subprograma
+                sub=programa[n];
+                console.log('comienza ejecutar:',subname,sub,'callstack',callStack,'pcounter',stackPCounter,'pclength',stackPCounter.length)
+                // se ejecutan las lineas de a una, usando variable sub y linea                
+            }
+            return n;
+        }
+
+        function secondOr(t,def){ 
+        //retorna el segundo elemento, pero si no existe retorna def             
+            if(t.length<=1) 
+                return def
+            else 
+                return t[1];             
+        }
+
+        function nop(){} //el enter no hace nada
+        function help(){
+            var i=ink,p=paper,s=shadow;
+            cls()
+            paper=5; ink=8; shadow=8;
+
+            print( " * COMANDOS BASIC IMPELENTADOS *");
+            paper=15; ink=1; shadow=3;
+            print( " HELP - muestra esta pantalla   ");
+            print( " INK n  -cambia color de tinta  ");
+            print( " PAPER n -cambia color de fondo ");
+            print( " SHADOW n -cambia color sombra  ");
+            print( " LIST [sub] -muestra programa   ");
+            print( " CLS  -borra la pantalla        ");
+            print( " LET [var]=exp -asigna un dato  ");
+            print( " PRINT [algo] -muestra un texto ");
+            print( " SUB nombre   -crea sub programa");
+            print( " DEL nombre  -borra sub programa");
+            print( " RUN [nom] - ejecuta programa   ");
+            print( " PAUSE [t] - pausa en segundos  ");
+            print( "                                ");            
+            ink=i;paper=p;shadow=s;
+        }
+        
+
+        function stackassign(varname,valor) {
+            var vars=stackArray[stackArray.length-1];
+            //console.log('guardar ',varname,valor,vars);
+            if (!vars) {vars={};console.log('se crea vars')}
+            vars[varname]=valor;
+            //stackArray(stackArray.length-1)=vars;
+            //console.log('vars',vars,stackArray);
+        }
+
+
+        function stackget(varname) {
+            var vars=stackArray[stackArray.length-1];
+            if (!vars) vars={};
+            if (vars.hasOwnProperty(varname)){
+                //console.log('get es ',vars[varname])                
+                if (Number.parseFloat(vars[varname]))
+                    return Number.parseFloat(vars[varname])
+                else
+                    return vars[varname];
+            }
+            else{
+                if (Number.parseFloat(varname))
+                    return Number.parseFloat(varname)
+                else                     
+                    return varname;
+            }
+        }
+
+        function calcula(operacion,operando,valor){
+            if(operacion=='+') return stackget(operando)+stackget(valor);
+            if(operacion=='-') return stackget(operando)-stackget(valor);
+            if(operacion=='*') return stackget(operando)*stackget(valor);
+            if(operacion=='/') return stackget(operando)/stackget(valor);
+        }
+
+
+
+     /*   function letCommand(args,cmd){
+            //let a=1   let a = 1
+            //let x="hola que tal"
+            //console.log(args[1])
+            //var value=args[1].split("=")[0];
+            let detectar=0;
+            var varname='',valor=''; inquotes=false; operacion='';operando='';
+            for(var i=0;i<cmd.length;i++){
+                c=cmd.charAt(i);
+
+                if (detectar==0 && c==' ') detectar=1; //fin let comienza nombre de variable                
+                if (detectar==1 && c!=' ') if (c=='=') detectar=2; else varname+=c; //guarda nombre hasta que encuentra el =
+                if (detectar==2 && c!='=') detectar=3; //fin de = comienza expresión
+                if (detectar==3) { 
+                    if (c=="\"") inquotes=!inquotes
+                    else
+                    if (!inquotes && "+*-/()".includes(c)){
+                        // si comienza operaciones significa que terminó el número
+                        // entonces si hay una operacion anterior la realiza
+                        if (operacion!='') {
+                            res=calcula(operacion,operando,valor);
+                            //console.log('se realiza operacion forzada',c,operando,valor,res)
+                            operando=res;
+                            valor='';
+                            } 
+                        else {
+                            // comienza operación,
+                            operacion=c;
+                            operando=valor;
+                            valor='';
+                            //console.log('comienza operacion',c,operando)
+                        }
+                    } else
+                        if (inquotes || c!=' ') // procesa todo entre comillas, sin comillas se saltea el espacio
+                            valor+=c; 
+                }
+            }
+            if (operacion!='') {
+                            res=calcula(operacion,operando,valor);
+                            //console.log('se realiza operacion final',c,operando,valor,res)
+                            valor=res;
+                            } 
+            if (detectar<3) {println('**error en let**');console.log(detectar,varname,valor)}
+            else stackassign(varname,valor);
+            //console.log('fin let',varname + '=' + valor,stackArray)
+        }*/
+
+        function delCommand(t,command){
+            if (t[1]) {
+                n=subs.indexOf(t[1]);
+                delete subs[n];
+                delete programa[n];
+            }
+
+        }
+
+        /*function printCommand(s){
+            var values=splitComma(s); 
+            values.forEach(element => {
+                var expr=''+stackget(element);
+                print(expr);
+            });
+            if (s.charAt(s.length-1)!=';') {cursorNexLine();console.log('enter')}
+        }*/
+
+        function ejecutar(t,command){
+            var ejec='';
+            bBubble=true;
+
+            if (t.length>0) ejec=t[0].toLowerCase();
+
+            var lrunResult=runStart(t[0]);            
+            if (bBubble)
+            if (ejec=="") nop
+            else
+            if (ejec=="paper") paper=Number.parseInt(t[1])
+            else
+            if (ejec=="ink") ink=Number.parseInt(t[1])
+            else
+            if (ejec=="shadow") shadow=Number.parseInt(t[1])
+            else
+            if (ejec=="cls") cls()
+            else
+            if (ejec=="sub") edit(t[1])
+            else
+            if (ejec=="list") { if(t[1]) list(t[1]) 
+                                else listSubs()}
+            else
+            if (ejec=="print") parser.execute(command) //printCommand(command.substring(6))
+            else
+            if (ejec=="run" || ejec=="call"){runStart(secondOr(t,'main'))}
+            else
+            if (ejec=="pause"){beginPause(secondOr(t,0))}
+            else
+            if (ejec=="help") help()
+            else                                                    
+            if (ejec=="let") parser.execute(command) //letCommand(t,command)
+            else                                                    
+            if (ejec=="del") delCommand(t,command)
+            else 
+             if (lrunResult==-1) println('comando incorrecto');
+                
+        }
+
+        function tokenizar(s){
+            return splitQuot(s); //s.split(" ");
+        }
+
+        function onKeypressExecute(e){
+            if (bPausa) endPause();
+            if (e.key=='Enter') {
+                if (bSubEnEdicion) {
+                    if (command.toLowerCase()=="end sub") finalizaEdit();
+                    else sub.push(command);
+                    putChar(e.charCode)
+                } else {
+                    cursorNexLine(); 
+                    ejecutar(tokenizar(command),command)
+                }
+                command='';
+            } else {
+                command+=e.key;
+                putChar(e.charCode)
+            }
+        }
+
+        function rollbackchar(){
+            cursorX--;if(cursorX==-1) {cursorX=31;cursorY--;if(cursorY==-1){ cursorY=0;cursorX=0}}
+        }
+
+        function onKeydownExecute(){
+            cursorEnable=false;
+            dibujaChar(cursorX,cursorY,32,colores[cursorColor2],colores[cursorColor1],colores[cursorColor2]);                    
+        }
+
+        function onKeyupExecute(e){
+            if (e.key=='Backspace') {
+                rollbackchar();
+                putChar(32);
+                rollbackchar();
+                command=command.substring(0,command.length-1)
+            }
+            cursorEnable=true;
+        }
+
+        function onCursorBlink(){
+            if (cursorEnable){                
+                cursorBlinking=!cursorBlinking;
+                if (cursorBlinking){
+                    dibujaChar(cursorX,cursorY,95,colores[cursorColor1],colores[cursorColor2],colores[cursorColor1])                    
+                }
+                else {
+                    dibujaChar(cursorX,cursorY,95,colores[cursorColor2],colores[cursorColor1],colores[cursorColor2]);                    
+                }
+            } 
+        }
+
+        window.onload=setInterval(drawall,1000/30); 
+        window.onkeypress=onKeypressExecute;
+        window.onkeydown=onKeydownExecute;
+        window.onkeyup=onKeyupExecute;
+        setInterval(onCursorBlink,400);
+
+        shadow=0;ink=5;paper=7;flash=0;
+        cls();
+        ink=2; paper=6; shadow=0;
+        print(' WebBASIC - LAVazquez 2021      ');
+        ink=15; paper=7; println('type help for commands');
+        println('');     
+
+        shadow=0;ink=5;paper=7;flash=0;
+                
+    </script>
+</html>
