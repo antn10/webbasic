@@ -197,6 +197,9 @@
                 this.i=0;                
                 this.parseCmd();
             },
+            executeFunc(nom,pars){
+                return 1;
+            },
 
             parseCmd(){
                 var t=tokenizar(this.s);
@@ -215,7 +218,6 @@
                         this.i+=4; this.parseLET();
                     }                        
                     if (this.s.substring(this.i,this.i+6)=='print ') {
-                        console.log('entra en parseprint')
                         this.i+=6; this.parsePRINT();
                     }                
                     this.i++;        
@@ -225,35 +227,9 @@
             parsePRINT(){
                 var start=this.i;
                 let valores=this.parseEXPR(';');
-                console.log('imprimir',valores);
                 valores.forEach(element => {
-                    console.log('print',element)
                     print(element);
                 });             
-
-/*                        while (this.i<this.s.length){
-                    console.log('parsePRINT',this.s.charAt(this.i),this.i)    
-                    // calcula expresión e imprime en pantalla  
-                    if (this.i==start) {
-                        valores=this.parseEXPR(';');
-                        console.log('primero',valores)
-                        valores.forEach(element => {
-                            console.log('print',element)
-                            print(element);
-                        });                                            
-                    }
-                    if (this.s.charAt(this.i)==';') {
-                        i++; //se saltea el ;
-                        valores=this.parseEXPR(';');
-                        console.log('segundo',valores)
-                        valores.forEach(element => {
-                            console.log('print',element)
-                            print(element);
-                        });                                            
-                    }
-                    this.i++;
-                }*/
-                console.log('evalua ; final: ',this.s.charAt(this.i-1))
 
                 if (this.i>1) if (this.s.charAt(this.i-1)!=';') 
                     cursorNexLine();
@@ -268,10 +244,8 @@
                 //    evalúa expresión y asigna
                 while (this.i<this.s.length){
 
-                    console.log('parseLET',this.s.charAt(this.i))
                     // hasta que llega el = toma nombre de variable
                     if (this.s.charAt(this.i)!='=') {
-                        console.log('varname',this.s.charAt(this.i))
                         varname+=this.s.charAt(this.i);
                     }
                     // luego del = viene una expresión
@@ -279,7 +253,6 @@
                         this.i++;
                         //retorna lista de expresiones, para let sólo sirve el primero
                         valor=this.parseEXPR('');
-                        console.log('LET',varname,valor)
                         stackassign(varname,valor[0]);
                     }
                     this.i++;
@@ -290,7 +263,7 @@
             //                      b)  5;"hola";:      -- separador ";" final '' para comando print
             //                      c)  code(5)+(a*50)  -- separador ""  final '' para comando let
             parseEXPR:function(separador,charfinal=':'){
-                var inquotes=false, operacion='œ',operando='';
+                var inquotes=false, operacion='œ',operando='',considerarVariable=true;
                 var c='',valores=[],valor='';comienzo=this.i,subval='';
                 // 1 espera nombre de variable
                 // 2 espera '=' 
@@ -298,28 +271,35 @@
                 // espera nombre de variable
                 while (this.i<this.s.length && this.s.charAt(this.i)!=charfinal){
                     //log('if',this.s.charAt(this.i),'=;',!inquotes)
-                    //console.log('parseEXPR1o',this.s.charAt(this.i),!inquotes,separador)
                     while (this.i<this.s.length && (!(separador+charfinal).includes(this.s.charAt(this.i)) || inquotes)){
                         //console.log('parseEXPR',this.i,this.s.charAt(this.i),'charfinal',charfinal)
                         c=this.s.charAt(this.i);
-                        if (c=="\"") inquotes=!inquotes
+                        if (c=="\"") {inquotes=!inquotes;considerarVariable=false;}
                         else
-                            if (!inquotes && c=='(' && (this.i==comienzo || 
-                                    '*/+-'.includes(this.s.charAt(this.i-1)))) {
-                                //console.log('--sub expresión:',this.i,operacion)
-                                this.i++;
-                                console.log('antes parse operacion es',operacion)
-                                let valores=this.parseEXPR('',')');
-                                valor=valores[0];                                
-                                c=this.s.charAt(this.i); 
-                                console.log('despues parse valor es',valor)
-                                if (operacion!='œ') { // si tiene operación pendiente la realiza
-                                    valor=calcula(operacion,operando,valor); 
-                                    operacion='œ';operando='';
+                            if (!inquotes && c=='(') {
+                                // parentesis matemático
+                                if (this.i==comienzo || 
+                                    '*/+-'.includes(this.s.charAt(this.i-1))) {
+                                    //console.log('--sub expresión:',this.i,operacion)
+                                    this.i++;
+                                    let valores=this.parseEXPR('',')');
+                                    valor=valores[0];                                
+                                    c=this.s.charAt(this.i); 
+                                    if (operacion!='œ') { // si tiene operación pendiente la realiza
+                                        valor=calcula(operacion,operando,valor); 
+                                        operacion='œ';operando='';
+                                    }
+                                    else console.log('retorno',valor,c,operacion);
+                                    
+                                } else {
+                                    // paréntesis de función
+                                    this.i++; //saltear primer paréntesis
+                                    let params=this.parseEXPR(',',')'); // obtiene lista de expresiones para usar de parámetros                                                                        
+                                    ret = this.executeFunc(valor,params);
+                                    console.log('ejecutado func',valor,params,ret);
+                                    valor=ret;                                    
                                 }
-                                else console.log('retorno',valor,c,operacion);
-                                
-                                console.log('resultado de subexpresión:',valor,operacion)                                    
+
                             } else
                             if (!inquotes && '+-*/'.includes(c)){
                                 // si tiene una operación pendiente la finaliza
@@ -335,8 +315,9 @@
                             this.i++;
                             //console.log('2do +1',this.i)
                     }
-                    if (operacion=='œ') 
-                        if (!inquotes) valor=stackget(valor);
+                    if (operacion=='œ') {
+                        if (considerarVariable) valor=stackget(valor);
+                    }
                     else
                     {
                         res=calcula(operacion,operando,valor);
@@ -348,8 +329,9 @@
                     valor='';
                     //this.i++;
                     if (this.s.charAt(this.i)==separador) this.i++;
+                    considerarVariable=true;
                 }
-                console.log('antes de salir expresión operacion es ',operacion)
+                console.log('antes de salir expresión valor es ',valores)
             return valores;
             }
         }
@@ -577,6 +559,7 @@
                 stackArray.push({});//nuevo espacio de variables locales
                 callStack.push(subname);// nuevo nombre de subprograma a ejecutar
                 stackPCounter.push(0); //program counter para el subprograma
+                stackParser.push(parser.clone);//se guarda un status del parser 
                 sub=programa[n];
                 console.log('comienza ejecutar:',subname,sub,'callstack',callStack,'pcounter',stackPCounter,'pclength',stackPCounter.length)
                 // se ejecutan las lineas de a una, usando variable sub y linea                
@@ -626,13 +609,17 @@
             //console.log('vars',vars,stackArray);
         }
 
+        function isNumeric(n) {
+             return !isNaN(parseFloat(n)) && isFinite(n);
+        }
 
         function stackget(varname) {
             var vars=stackArray[stackArray.length-1];
             if (!vars) vars={};
             if (vars.hasOwnProperty(varname)){
-                //console.log('get es ',vars[varname])                
-                if (Number.parseFloat(vars[varname]))
+                console.log('get es numerico',varname,isNumeric(vars[varname]))    
+                if (isNumeric(vars[varname]))
+                //if (Number.parseFloat(vars[varname]))
                     return Number.parseFloat(vars[varname])
                 else
                     return vars[varname];
