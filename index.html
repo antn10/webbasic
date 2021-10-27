@@ -260,6 +260,15 @@
                 }              
             },
 
+            parseAT(){
+                this.i+=3;
+                var valoresFilaColumna=this.parseEXPR(',',';');
+                if (valoresFilaColumna.length==2){
+                    
+                }
+
+            }
+
             // expresiones validas: a)  1+2,"hola",5)   -- separador "," final ')' para llamada de función
             //                      b)  5;"hola";:      -- separador ";" final '' para comando print
             //                      c)  code(5)+(a*50)  -- separador ""  final '' para comando let
@@ -272,8 +281,17 @@
                 // espera nombre de variable
                 while (this.i<this.s.length && this.s.charAt(this.i)!=charfinal){
                     //log('if',this.s.charAt(this.i),'=;',!inquotes)
+
+                    // si estoy en un print se evalúan expresiones AT,INK,PAPER,SHADOW,OVER
+                    if (separador==';') { 
+                        if (this.s.substring(this.i,this.i+3).toLowerCase()=='at ') this.parseAT();
+                        //if (this.s.substring(this.i,this.i+4)=='ink ') this.parseINK();
+
+                    } 
                     while (this.i<this.s.length && (!(separador+charfinal).includes(this.s.charAt(this.i)) || inquotes)){
                         //console.log('parseEXPR',this.i,this.s.charAt(this.i),'charfinal',charfinal)
+
+
                         c=this.s.charAt(this.i);
                         if (c=="\"") {inquotes=!inquotes;considerarVariable=false;}
                         else
