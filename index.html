@@ -1,3 +1,4 @@
+<meta charset="UTF-8">
 <!DOCTYPE html>
     <head><title>webBASIC - LAVazquez 2021</title></head>
     <style>body {
@@ -43,6 +44,7 @@
         var callStack=[];//pop cuando se llama un método
         var stackPoints=[];//para uso dentro de un método en loops
         var stackPCounter=[];
+        var stackTareas=[];
         
         var command = '';
         var fonts=[,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'                                                                ', //32-espacio
@@ -192,6 +194,14 @@
                 this.status=0;
             },
 
+            clone(){
+                var c=new parser();
+                c.i=this.i;
+                c.s=this.s;
+                c.status=this.status;
+                return c;
+            },
+
             execute(cmd){
                 console.log('execute',cmd)
                 this.s=cmd;
@@ -215,10 +225,10 @@
                 // se espera un nuevo comando                            
                 while (this.i<this.s.length){
                     console.log('parseCMD',this.s.charAt(this.i),this.s.substring(this.i,this.i+4))
-                    if (this.s.substring(this.i,this.i+4)=='let ') {
+                    if (this.s.substring(this.i,this.i+4).toLowerCase()=='let ') {
                         this.i+=4; this.parseLET();
                     }                        
-                    if (this.s.substring(this.i,this.i+6)=='print ') {
+                    if (this.s.substring(this.i,this.i+6).toLowerCase()=='print ') {
                         this.i+=6; this.parsePRINT();
                     }                
                     this.i++;        
@@ -267,7 +277,7 @@
                     
                 }
 
-            }
+            },
 
             // expresiones validas: a)  1+2,"hola",5)   -- separador "," final ')' para llamada de función
             //                      b)  5;"hola";:      -- separador ";" final '' para comando print
@@ -575,10 +585,11 @@
             //busca el sub a ejecutar si puso sólo RUN, recibe main
             n=subs.indexOf(subname);
             if (n>-1) {
+                console.log('antes ejecutar:',subname,sub,'callstack',callStack,'pcounter',stackPCounter,'pclength',stackPCounter.length)
                 stackArray.push({});//nuevo espacio de variables locales
                 callStack.push(subname);// nuevo nombre de subprograma a ejecutar
                 stackPCounter.push(0); //program counter para el subprograma
-                stackParser.push(parser.clone);//se guarda un status del parser 
+                stackTareas.push(parser.clone);//se guarda un status del parser 
                 sub=programa[n];
                 console.log('comienza ejecutar:',subname,sub,'callstack',callStack,'pcounter',stackPCounter,'pclength',stackPCounter.length)
                 // se ejecutan las lineas de a una, usando variable sub y linea                
@@ -769,7 +780,7 @@
         }
 
         function onKeypressExecute(e){
-            if (bPausa) endPause();
+            if (bPausa && e.key=='Enter') endPause();
             if (e.key=='Enter') {
                 if (bSubEnEdicion) {
                     if (command.toLowerCase()=="end sub") finalizaEdit();
