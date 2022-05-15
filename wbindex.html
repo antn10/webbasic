@@ -1,6 +1,3 @@
-<!-- 
-    se agrega emulador z80
--->
 <meta charset="UTF-8">
 <!DOCTYPE html>
     <head><title>webBASIC - LAVazquez 2021</title></head>
@@ -17,76 +14,10 @@
         <div id="root">
             <canvas id="myCanvas" width="256" height="192" >
             </canvas>
-        </div>
+          </div>
     </body>
-    <script type="text/javascript" src="Z80.js"></script>
-    <script>
-        var hardware={
-            memory:new Uint8ClampedArray(65536),
-            processor:null,
-        }
-        var coreParam={
-            
-            mem_read:function(address){ return hardware.memory[address]; },
-            mem_write:function(address, value){ hardware.memory[address]=value;},
-            io_read:function(port){
-                return hardware.memory[0x6000 + port];
-            },
-            io_write(port, value){
-                hardware.memory[0x6000+port]=value;
-            }
-        }
-        var key_pressed_port_cd=0;
 
-        hardware.processor=new Z80(coreParam);
-        console.log('computer',hardware,coreParam);
-
-        var textTokens=[ ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, // 0..31
-                         ' ','!','"','#','$','%','&','´',   '(',')','*','+',',','-','.','/',  //  32..47
-                         '0','1','2','3','4','5','6','7',   '8','9',':',';','<','=','>','?',         // 48..64
-                         '@','A','B','C','D','E','F','G',   'H','I','J','K','L','M','N','O',         // 65..79
-                         'P','Q','R','S','T','U','V','W',   'X','Y','Z','[','\\',']','^','_',         // 80..96
-                         '¢','a','b','c','d','e','f','g',   'h','i','j','k','l','m','n','o',         // 96..111
-                         'p','q','r','s','t','u','v','w',   'x','y','z','{','|','}','≈','º',         // 112..127
-                         '','','','','','','','',          '','','','','','','','',         // 128..143
-                         '','','','','','','','',          '','','','','','','','edit',         
-                         'del','sub','shadow','help','play','rnd','inkey$','pi',            'fn','point','screen$','attr','at','tab','val$','code', 
-                         'val','len','sin','cos','tan','asn','acs','atn',   'ln','exp','int','sqr','sgn','abs','peek','in',         
-                         'usr','str$','chr$','not','bin','or','and','<=',   '>=','<>','line','then','to','step','def fn','cat',
-                         'format','move','erase','open','close','merge','verify','beep',   'circle','ink','paper','flash','birght','inverse','over','out',
-                         'lprint','llist','stop','read','data','restore','new','border',   'continue','dim','rem','for','goto','gosub', 'input','load',
-                         'list','let','pause','next','poke','print','plot','run',          'save','randomize','if','cls','draw','clear','return','copy',         
-                         'symbol'
-                    ]
-
-        var basicTokens={
-            ' ':32, '!':33, '"':34, '#':35, '$':36, symPorc:37, symAmp:38, symTild:39,
-            symOpenP:40,symCloseP:41,symAster:42,symPlus:43, symComma:44,symMinus:45, symDot:46,
-            symDiv:47, num0:48,num1:49,num2:50,num3:51,num4:52,num5:53,num6:54,num7:55,num8:56,num9:57,
-            symDosP:58,symPyC:59,symMenor:60,symEq:61,symMayor:62,symQuest:63,symArroba:64,
-            A:65, B:66, C:67, D:68, E:69, F:70, G:71, H:72, I:73, J:74, K:75, L:76, M:77, N:78, O:79, P:80,
-            Q:81, R:82, S:83, T:84, U:85, V:86, W:87, X:88, Y:89, Z:90, symOpS:91, symSlash:92, symCloseS:93,
-            symElvado:94,symUnder:95, symLibra:96, a:97,b:98,c:99,d:100,e:101,f:102,g:103,h:104,i:105,j:106,
-            k:107,l:108,m:109,n:110,o:111,p:112,q:113,r:114,s:115,t:116,u:117,v:118,w:119,x:120,y:121,z:122,
-            edit:159,del:160,
-            sub:161,shadow:162, help:163,play:164,        rnd:165, inkey$:166, pi: 167, fn: 168, 
-            point: 169, screen$: 170, attr: 171,          at:172,   tab:173, val$:174,  code:175, 
-            val:176, len:177,   sin:178, cos:179,         tan:180,  asn:181, acs:182,  atn:183,  
-            ln:184,  exp:185,   int:186, sqr:187,         sgn:188,  abs:189, peek:190, in:191,  
-            usr:192,str$:193,chr$:194,not:195,            bin:196, or:197, and:198,lessequal:199,
-            moreequal:200,diff:201,line:202,then:203,     to:204,step:205,deffn:206,cat:207, 
-            format:208,move:209,erase:210,open:211,       close:212,merge:213,verify:214,beep:215,
-            circle:216,ink:217,paper:218,flash:219,       bright:220,inverse:221,over:222,out:223,
-            lprint:224,llist:225,stop:226,read:227,       data:228,restore:229,new:230,border:231,
-            continue:232,dim:233,rem:234,for:235,         goto:236,gosub:237,input:238,load:239,
-            list:240,let:241,pause:242,next:243,          poke:244,print:245,plot:246,run:247,
-            save:248,randomize:249,if:250,cls:251,        draw:252,clear:253,return:254,copy:255,
-            symbol:256
-        };
-
-
-        
-        
+    <script >
         var canvas=document.querySelector('canvas');
         var ctx=canvas.getContext('2d');
         ctx.webkitImageSmoothingEnabled = false;
@@ -100,6 +31,9 @@
         var bBubble=true; // si un sub se llama igual a comando ejecuta los dos a menos que el sub ponga buble=false
         //sp=32,a=65
         var pixels = imageData.data;
+        var colores=[[31,31,31],[0,0,255],[255,0,0],[255,0,255],[0,255,0],[0,255,255],[255,255,0],[191,191,191],
+        [0,0,0],[0,0,127],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[127,127,127],
+        [127,127,127],[127,127,255],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[255,255,255]];
         
         var cursorColor1=1, cursorColor2=14, cursorEnable=true, cursorBlinking=false;
         var programa=[];//array de arrays de lineas de codigo, cada array es un sub
@@ -117,16 +51,12 @@
         var panta={
             cursorX:0,
             cursorY:0,
-            page:0,
             ink:1,
             paper:6,
             shadow:5, 
-            colores:[[31,31,31],[0,0,255],[255,0,0],[255,0,255],[0,255,0],[0,255,255],[255,255,0],[191,191,191],
-                    [0,0,0],[0,0,127],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[127,127,127],
-                    [127,127,127],[127,127,255],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[255,255,255]],
 
             putChar: function (cod){ // dibuja un char y avanza el cursor
-                this.dibujaChar(this.cursorX,this.cursorY,cod,this.colores[this.ink],this.colores[this.paper],this.colores[this.shadow]);
+                dibujaChar(this.cursorX,this.cursorY,cod,colores[this.ink],colores[this.paper],colores[this.shadow]);
                 if (cod==13) {this.cursorX=32;}
                 else this.cursorX++;
                 if (this.cursorX==32) {this.cursorX=0;this.cursorY++; if(this.cursorY==24) {this.cursorY=0;cls()}}
@@ -150,7 +80,7 @@
                 "                                                                                               "
                 );
                 //imprime el ultimo sin movimiento de cursor para que no se ejecute cls en ciclo
-                this.dibujaChar(this.cursorX,this.cursorY,32,this.colores[this.ink],this.colores[this.paper],this.colores[this.shadow]);
+                dibujaChar(this.cursorX,this.cursorY,32,colores[this.ink],colores[this.paper],colores[this.shadow]);
                 this.cursorX=0;this.cursorY=0;
             },
 
@@ -180,51 +110,10 @@
                 print( "                                ");            
                 this.ink=i;this.paper=p;this.shadow=s;
             },
-
-            getPixel: function (x, y) {
-            // retorna el color de un pixel en pantalla
-                "use strict";
-                var index = 0, r, g, b;
-                index = (x + y * imageData.width) * 4;
-                r = imageData.data[index];
-                g = imageData.data[index + 1];
-                b = imageData.data[index + 2];
-                return [r, g, b];
-            },
-
-            setPixel: function (x, y, rgb) {
-            // pinta un pixel en pantalla cambiando imageData, no se hace visible hasta que se hace putImage, ver animate()
-                "use strict";
-                var index = 0;
-                index = (x + y * imageData.width) * 4;
-                imageData.data[index]     = rgb[0];
-                imageData.data[index + 1] = rgb[1];
-                imageData.data[index + 2] = rgb[2];
-                imageData.data[index + 3] = 255;
-            },
-
-            dibujaChar: function (xx,yy,cod,cink,cpaper,cshadow){   //hace el char pero no avanza
-            var x=xx*8,y=yy*8;            
-            if (cod>31) 
-                if (fonts[cod])
-                    for (var i=0;i<64;i++){                    
-                        if (fonts[cod].charAt(i)=='X') 
-                            this.setPixel(x,y,cink)
-                        else 
-                            if (fonts[cod].charAt(i)=='-') 
-                                this.setPixel(x,y,this.colores[this.shadow])
-                            else
-                                this.setPixel(x,y,this.colores[this.paper])                                
-                        x++;if (x==xx*8+8){x=xx*8;y++}
-                    }
-                else
-                    console.log('no definido codigo ',cod);
-            }
              
         }
 
-        // estaria bueno poner esto en la memoria 
-        // 00111100 00100010  
+
         var fonts=[,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'                                                                ', //32-espacio
                    '           X-      X-      X-      X-              X-           ',  //33-!
                    '         X-  X-  X-  X-  X-  X-                                 ',  //34-"
@@ -370,7 +259,6 @@
                 this.i=0;
                 this.s='';
                 this.status=0;
-                this.tokens=[];
             },
 
             clone(){
@@ -384,8 +272,7 @@
             execute(cmd){
                 console.log('execute',cmd)
                 this.s=cmd;
-                this.i=0;       
-                this.tokens=tokenizar(this.s);
+                this.i=0;                
                 this.parseCmd();
             },
             executeFunc(nom,pars){
@@ -393,52 +280,35 @@
             },
 
             parseCmd(){
-                var t=this.tokens; //tokenizar(this.s);
+                var t=tokenizar(this.s);
                 var ejec='';
-                if (t.length>0) ejec=t[0];
-
-                // si el comando es un sub, lo llama
+                if (t.length>0) ejec=t[0].toLowerCase();
                 if (subs.indexOf(ejec)>-1){
                     i+=ejec.length;
                     exprs=this.parseEXPR(',');
                     runStart(ejec,exprs);
                 }
-                console.log('t,i,',t,this.i);
-                // se espera un nuevo comando                            
-                while (this.i<t.length){
-                    console.log('parseCMD', this.tokens[this.i])
-                    ejec=t[this.i++]; // lee y se mueve
 
-                    if (ejec==basicTokens.help) panta.help()
-                    else
-                    if (ejec==basicTokens.ink) panta.ink=this.parseEXPR('')  // Number.parseInt(t[1])                    
-                    else
-                    if (ejec==basicTokens.shadow) panta.shadow=this.parseEXPR('')
-                    else
-                    if (ejec==basicTokens.paper)  panta.paper=this.parseEXPR('')
-                    else
-                    if (ejec==basicTokens.let) {this.parseLET()} 
-                    //if (this.s.substring(this.i,this.i+4).toLowerCase()=='let ') {
-                    //    this.i+=4; this.parseLET();
-                    //}
-                    else
+                // se espera un nuevo comando                            
+                while (this.i<this.s.length){
+                    console.log('parseCMD',this.s.charAt(this.i),this.s.substring(this.i,this.i+4))
+                    if (this.s.substring(this.i,this.i+4).toLowerCase()=='let ') {
+                        this.i+=4; this.parseLET();
+                    }                        
                     if (this.s.substring(this.i,this.i+6).toLowerCase()=='print ') {
                         this.i+=6; this.parsePRINT();
-                    } else 
-                    println( "error, en " + this.tokens[this.i])
+                    }                
                     this.i++;        
                 }
             },
 
             parsePRINT(){
-                // imprime un conjunto de expresiones separadas por ';' hasta encontrar un ':', fin de línea (enter) o fin de sentencia
-                var start=this.i; 
+                var start=this.i;
                 let valores=this.parseEXPR(';');
                 valores.forEach(element => {
                     print(element);
-                });
+                });             
 
-                // si no termina en ; agrega fin de línea
                 if (this.i>1) if (this.s.charAt(this.i-1)!=';') 
                     panta.cursorNexLine();
             },
@@ -450,14 +320,14 @@
                 // espera nombre de variable
                 // si viene '=' 
                 //    evalúa expresión y asigna
-                while (this.i<this.tokens.length){
+                while (this.i<this.s.length){
 
                     // hasta que llega el = toma nombre de variable
-                    if (this.tokens[this.i]!='=') {
-                        varname+=this.tokens[this.i];
+                    if (this.s.charAt(this.i)!='=') {
+                        varname+=this.s.charAt(this.i);
                     }
                     // luego del = viene una expresión
-                    if (this.tokens[this.i]=='=') {                        
+                    if (this.s.charAt(this.i)=='=') {                        
                         this.i++;
                         //retorna lista de expresiones, para let sólo sirve el primero
                         valor=this.parseEXPR('');
@@ -478,15 +348,6 @@
 
             },
 
-            tokenlowstring:function(n){
-                //retorna un string con los siguientes n caracteres a partir de i
-                var res='';
-                for (let index = 0; index < n; index++) {
-                    res+= array[index].toLowerCase();                    
-                }
-                return res;
-            },
-
             // expresiones validas: a)  1+2,"hola",5)   -- separador "," final ')' para llamada de función
             //                      b)  5;"hola";:      -- separador ";" final '' para comando print
             //                      c)  code(5)+(a*50)  -- separador ""  final '' para comando let
@@ -497,25 +358,24 @@
                 // 2 espera '=' 
                 // 3 evalúa expresión
                 // espera nombre de variable
-                console.log('evalua',this.tokens);
-                while (this.i<this.tokens.length && this.tokens[this.i]!=charfinal){
+                while (this.i<this.s.length && this.s.charAt(this.i)!=charfinal){
                     //log('if',this.s.charAt(this.i),'=;',!inquotes)
 
                     // si estoy en un print se evalúan expresiones AT,INK,PAPER,SHADOW,OVER
                     if (separador==';') { 
-                        if (this.tokenlowstring(3)=='at ') this.parseAT();
+                        if (this.s.substring(this.i,this.i+3).toLowerCase()=='at ') this.parseAT();
                         //if (this.s.substring(this.i,this.i+4)=='ink ') this.parseINK();
                         console.log(9)
                     } 
-                    while (this.i<this.tokens.length && (!(separador+charfinal).includes(this.tokens[this.i]) || inquotes)){
+                    while (this.i<this.s.length && (!(separador+charfinal).includes(this.s.charAt(this.i)) || inquotes)){
                         //console.log('parseEXPR',this.i,this.s.charAt(this.i),'charfinal',charfinal)
-                        c=this.tokens[this.i];
+                        c=this.s.charAt(this.i);
                         if (c=="\"") {inquotes=!inquotes;considerarVariable=false;}
                         else
                             if (!inquotes && c=='(') {
                                 // parentesis matemático
                                 if (this.i==comienzo || 
-                                    '*/+-'.includes(this.tokens[this.i-1])) {
+                                    '*/+-'.includes(this.s.charAt(this.i-1))) {
                                     //console.log('--sub expresión:',this.i,operacion)
                                     this.i++;
                                     let valores=this.parseEXPR('',')');
@@ -563,7 +423,7 @@
                     valores.push(valor+'');
                     valor='';
                     //this.i++;
-                    if (this.tokens[this.i]==separador) this.i++;
+                    if (this.s.charAt(this.i)==separador) this.i++;
                     considerarVariable=true;
                 }
                 console.log('antes de salir expresión valor es ',valores)
@@ -574,7 +434,7 @@
         function splitQuot(s){
         // convierte string s en array pero mantiene lo que hay dentro de comillas junto: palabra1 palabra2 "dos palabras" ==> array de 3
             //The parenthesis in the regex creates a captured group within the quotes
-            var myRegexp = /[^\s:;"(),]+|"([^"]*)"|:|\(|\)|,|;/gi;
+            var myRegexp = /[^\s"]+|"([^"]*)"/gi;
             //var myString = 'single words "fixed string of words"';
             var myArray = [];
 
@@ -583,17 +443,86 @@
                 var match = myRegexp.exec(s);
                 if (match != null)
                 {
-                   // console.log('match:',match,match[1] ? match[1] : match[0],match[0])
                     //Index 1 in the array is the captured group if it exists
                     //Index 0 is the matched text, which we use if no captured group exists
-                    //myArray.push(match[1] ? match[1] : match[0]);
-                    myArray.push(match[0]);
+                    myArray.push(match[1] ? match[1] : match[0]);
+                }
+            } while (match != null);    
+            return myArray;        
+        }
+        function splitComma(s){
+        // separa por ; en array, acepta números, variables o string entre comillas
+
+            //The parenthesis in the regex creates a captured group within the quotes
+            var myRegexp = /[^;"]+|"([^"]*)"/gi;
+            //var myString = 'single words "fixed string of words"';
+            var myArray = [];
+            var vars=stackArray[stackArray.length-1];
+
+            do {
+                //Each call to exec returns the next regex match as an array
+                var match = myRegexp.exec(s);
+                if (match != null)
+                {
+                    //Index 1 in the array is the captured group if it exists
+                    //Index 0 is the matched text, which we use if no captured group exists
+                    //val=match[1] ? match[1] : match[0];
+                    // si está entre comillas se agrega
+                    if (match[0].charAt(0)=="\"") myArray.push(match[1])
+                    else // si es un número se agrega
+                     if (isNaN(match[0])==false)  {myArray.push(match[0])}
+                     else// si es nombre de variable agrega el valor
+                        if (vars.hasOwnProperty(match[0]) ) myArray.push(vars[match[0]])
+                        else // si no no se acepta
+                          print('Error en expresion ' + match[0]);                    
                 }
             } while (match != null);    
             return myArray;        
         }
 
-    
+
+        function getPixel(x, y) {
+        // retorna el color de un pixel en pantalla
+            "use strict";
+            var index = 0, r, g, b;
+            index = (x + y * imageData.width) * 4;
+            r = imageData.data[index];
+            g = imageData.data[index + 1];
+            b = imageData.data[index + 2];
+
+            return [r, g, b];
+        }
+
+        function setPixel(x, y, rgb) {
+        // pinta un pixel en pantalla cambiando imageData, no se hace visible hasta que se hace putImage, ver animate()
+            "use strict";
+            var index = 0;
+            index = (x + y * imageData.width) * 4;
+            imageData.data[index]     = rgb[0];
+            imageData.data[index + 1] = rgb[1];
+            imageData.data[index + 2] = rgb[2];
+            imageData.data[index + 3] = 255;
+        }
+
+        function dibujaChar(xx,yy,cod,cink,cpaper,cshadow){   //hace el char pero no avanza
+        var x=xx*8,y=yy*8;            
+        if (cod>31) 
+            if (fonts[cod])
+                for (var i=0;i<64;i++){                    
+                    if (fonts[cod].charAt(i)=='X') 
+                        setPixel(x,y,cink)
+                    else 
+                        if (fonts[cod].charAt(i)=='-') 
+                            setPixel(x,y,colores[panta.shadow])
+                        else
+                            setPixel(x,y,colores[panta.paper])
+                            
+                            x++;if (x==xx*8+8){x=xx*8;y++}
+                }
+            else
+                console.log('no definido codigo ',cod);
+        }
+
 
         function println(s){
         // imprime un string en pantalla, y avanza el cursor a la siguiente linea
@@ -636,10 +565,7 @@
 
         function edit(nombreSub){
         //editar subrutina nombreSub
-            console.log('edit:',nombreSub);
-            panta.cls();
             n=buscaoCrea(nombreSub,subs,insertarPrograma);
-            println( "sub " + nombreSub);
             sub=programa[n];
             showcode(sub);
             bSubEnEdicion=true;
@@ -771,74 +697,46 @@
         }
 
         function ejecutar(t,command){
-            //var ejec='';
-            //bBubble=true;
+            var ejec='';
+            bBubble=true;
 
-            //if (t.length>0) ejec=t[0];
-            //console.log('ejecutar:',t[0]);
-            parser.execute(command);
-/*
+            if (t.length>0) ejec=t[0].toLowerCase();
+
             var lrunResult=runStart(t[0]);            
             if (bBubble)
             if (ejec=="") nop
             else
-            if (ejec==basicTokens.paper) panta.paper=Number.parseInt(textTokens[t[1]])
+            if (ejec=="paper") panta.paper=Number.parseInt(t[1])
             else
-            if (ejec==basicTokens.ink) panta.ink=Number.parseInt(textTokens[t[1]])
+            if (ejec=="ink") panta.ink=Number.parseInt(t[1])
             else
-            if (ejec==basicTokens.shadow) panta.shadow=Number.parseInt(textTokens[ t[1]])
+            if (ejec=="shadow") panta.shadow=Number.parseInt(t[1])
             else
-            if (ejec==basicTokens.cls) panta.cls()
+            if (ejec=="cls") panta.cls()
             else
-            if (ejec==basicTokens.sub) edit(t[1])
+            if (ejec=="sub") edit(t[1])
             else
-            if (ejec==basicTokens.list) { if(t[1]) list(t[1]) 
+            if (ejec=="list") { if(t[1]) list(t[1]) 
                                 else listSubs()}
             else
-            if (ejec==basicTokens.print) parser.parsePRINT() //printCommand(command.substring(6))
+            if (ejec=="print") parser.execute(command) //printCommand(command.substring(6))
             else
-            if (ejec==basicTokens.run){runStart(secondOr(t,'main'))}
+            if (ejec=="run" || ejec=="call"){runStart(secondOr(t,'main'))}
             else
-            if (ejec==basicTokens.pause){beginPause(secondOr(t,0))}
+            if (ejec=="pause"){beginPause(secondOr(t,0))}
             else
-            if (ejec==basicTokens.help) panta.help()
+            if (ejec=="help") panta.help()
             else                                                    
-            if (ejec==basicTokens.let) parser.execute(command) //letCommand(t,command)
+            if (ejec=="let") parser.execute(command) //letCommand(t,command)
             else                                                    
-            if (ejec==basicTokens.del) delCommand(t,command)
-            else 
-            if (ejec==basicTokens.edit) edit(t[1])
+            if (ejec=="del") delCommand(t,command)
             else 
              if (lrunResult==-1) println('comando incorrecto');
-*/
                 
         }
 
         function tokenizar(s){
-            
-            // return splitQuot(s); //s.split(" ");
-            var Words=splitQuot(s);
-            var tokens=[];
-            //console.log('sin tokens',Words);
-            // convierte palabras clave en tokens            
-            for (let index = 0; index < Words.length; index++) {
-                const element = Words[index];
-                var token=textTokens.indexOf(element);
-                if (token>127) tokens.push(token); // tokenWords[index]=token;    
-                else {
-                    console.log('entra',token,element);
-                    tokens.push(element);
-
-                    // recorre la expresión y la agrega de a un carácter
-                    //for (let n = 0;  n<element.length; n++) {
-                    //    const caracter= element[n];
-                    //    console.log(caracter);
-                    //    tokens.push(caracter);                        
-                    //}
-                }
-            }
-            console.log('resultado de tokenizar',tokens);
-            return tokens;
+            return splitQuot(s); //s.split(" ");
         }
 
         function onKeypressExecute(e){
@@ -855,23 +753,14 @@
                 command='';
             } else {
                 command+=e.key;
-                panta.putChar(e.charCode);
-                k=e.charCode;
-                if(k !== 0) key_pressed_port_cd = k;
-                else {
-                    if(e.key.length === 1) {         
-                        key_pressed_port_cd = e.key.toUpperCase().charCodeAt(0);
-                    }
-                }                
-                hardware.processor.interrupt(false, 0x70); // trigger interrupt mode 2 (im 2), jumps at $0070     
-                console.log(key_pressed_port_cd);
+                panta.putChar(e.charCode)
             }
         }
 
 
         function onKeydownExecute(){
             cursorEnable=false;
-            panta.dibujaChar(panta.cursorX,panta.cursorY,32,panta.colores[cursorColor2],panta.colores[cursorColor1],panta.colores[cursorColor2]);                    
+            dibujaChar(panta.cursorX,panta.cursorY,32,colores[cursorColor2],colores[cursorColor1],colores[cursorColor2]);                    
         }
 
         function onKeyupExecute(e){
@@ -888,10 +777,10 @@
             if (cursorEnable){                
                 cursorBlinking=!cursorBlinking;
                 if (cursorBlinking){
-                    panta.dibujaChar(panta.cursorX,panta.cursorY,95,panta.colores[cursorColor1],panta.colores[cursorColor2],panta.colores[cursorColor1])                    
+                    dibujaChar(panta.cursorX,panta.cursorY,95,colores[cursorColor1],colores[cursorColor2],colores[cursorColor1])                    
                 }
                 else {
-                    panta.dibujaChar(panta.cursorX,panta.cursorY,95,panta.colores[cursorColor2],panta.colores[cursorColor1],panta.colores[cursorColor2]);                    
+                    dibujaChar(panta.cursorX,panta.cursorY,95,colores[cursorColor2],colores[cursorColor1],colores[cursorColor2]);                    
                 }
             } 
         }
