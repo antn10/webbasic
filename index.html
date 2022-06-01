@@ -1,5 +1,5 @@
 <!-- 
-    se agrega emulador z80
+    webbasic
 -->
 <meta charset="UTF-8">
 <!DOCTYPE html>
@@ -19,27 +19,23 @@
             </canvas>
         </div>
     </body>
-    <script type="text/javascript" src="Z80.js"></script>
     <script>
         var hardware={
-            memory:new Uint8ClampedArray(65536),
-            processor:null,
-        }
-        var coreParam={
-            
-            mem_read:function(address){ return hardware.memory[address]; },
-            mem_write:function(address, value){ hardware.memory[address]=value;},
-            io_read:function(port){
-                return hardware.memory[0x6000 + port];
-            },
-            io_write(port, value){
-                hardware.memory[0x6000+port]=value;
+            memory:new Int16Array(65536),
+            processor:{ pc:Number, // program counter
+                        process:function(){runNextLine();}, 
+                        interrupt:function(mode,address){}
+                      },
+            bus:{
+                peek:function(address){return hardware.memory[address];},
+                poke:function(address, value){hardware.memory[address]=value;},                
+                // los puertos están en la ubicación 0x6000
+                io_read:function(port){return hardware.memory[0x6000 + port];},
+                io_write(port, value){ hardware.memory[0x6000+port]=value;}
             }
         }
-        var key_pressed_port_cd=0;
 
-        hardware.processor=new Z80(coreParam);
-        console.log('computer',hardware,coreParam);
+        var key_pressed_port_cd=1; // puerto de tecla presionada
 
         var textTokens=[ ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, // 0..31
                          ' ','!','"','#','$','%','&','´',   '(',')','*','+',',','-','.','/',  //  32..47
@@ -55,8 +51,8 @@
                          'usr','str$','chr$','not','bin','or','and','<=',   '>=','<>','line','then','to','step','def fn','cat',
                          'format','move','erase','open','close','merge','verify','beep',   'circle','ink','paper','flash','birght','inverse','over','out',
                          'lprint','llist','stop','read','data','restore','new','border',   'continue','dim','rem','for','goto','gosub', 'input','load',
-                         'list','let','pause','next','poke','print','plot','run',          'save','randomize','if','cls','draw','clear','return','copy',         
-                         'symbol'
+                         'list','let','pause','next','poke','print','plot','run',          'save','randomize','if','cls','draw','clear','return','copy',
+                         'symbol','end sub','end if'
                     ]
 
         var basicTokens={
@@ -81,11 +77,8 @@
             continue:232,dim:233,rem:234,for:235,         goto:236,gosub:237,input:238,load:239,
             list:240,let:241,pause:242,next:243,          poke:244,print:245,plot:246,run:247,
             save:248,randomize:249,if:250,cls:251,        draw:252,clear:253,return:254,copy:255,
-            symbol:256
+            symbol:256,end_sub:257,end_if:258
         };
-
-
-        
         
         var canvas=document.querySelector('canvas');
         var ctx=canvas.getContext('2d');
@@ -410,22 +403,17 @@
                     ejec=t[this.i++]; // lee y se mueve
 
                     if (ejec==basicTokens.help) panta.help()
-                    else
-                    if (ejec==basicTokens.ink) panta.ink=this.parseEXPR('')  // Number.parseInt(t[1])                    
-                    else
-                    if (ejec==basicTokens.shadow) panta.shadow=this.parseEXPR('')
-                    else
-                    if (ejec==basicTokens.paper)  panta.paper=this.parseEXPR('')
-                    else
-                    if (ejec==basicTokens.let) {this.parseLET()} 
-                    //if (this.s.substring(this.i,this.i+4).toLowerCase()=='let ') {
-                    //    this.i+=4; this.parseLET();
-                    //}
-                    else
-                    if (this.s.substring(this.i,this.i+6).toLowerCase()=='print ') {
-                        this.i+=6; this.parsePRINT();
-                    } else 
-                    println( "error, en " + this.tokens[this.i])
+                    else if (ejec==basicTokens.ink) panta.ink=this.parseEXPR('')  // Number.parseInt(t[1])                    
+                    else if (ejec==basicTokens.shadow) panta.shadow=this.parseEXPR('')
+                    else if (ejec==basicTokens.paper)  panta.paper=this.parseEXPR('')
+                    else if (ejec==basicTokens.let) this.parseLET()
+                    else if (ejec==basicTokens.print) this.parsePRINT()
+                    else if (ejec==basicTokens.cls) panta.cls()
+                    else if (ejec==basicTokens.list) { var x=this.parseEXPR(''); if (x=='') listSubs(); else list(x)}
+                    else if (ejec==basicTokens.sub) edit(this.parseEXPR(''))
+                    else if (ejec==basicTokens.run){runStart(secondOr(t,'main'))}
+                    else if (ejec==basicTokens.pause){beginPause(secondOr(t,0))}
+                    else println( "error en " + this.tokens[this.i])
                     this.i++;        
                 }
             },
@@ -482,9 +470,9 @@
                 //retorna un string con los siguientes n caracteres a partir de i
                 var res='';
                 for (let index = 0; index < n; index++) {
-                    res+= array[index].toLowerCase();                    
+                    res+= this.tokens[index];     
                 }
-                return res;
+                return res.toLowerCase();
             },
 
             // expresiones validas: a)  1+2,"hola",5)   -- separador "," final ')' para llamada de función
@@ -574,7 +562,7 @@
         function splitQuot(s){
         // convierte string s en array pero mantiene lo que hay dentro de comillas junto: palabra1 palabra2 "dos palabras" ==> array de 3
             //The parenthesis in the regex creates a captured group within the quotes
-            var myRegexp = /[^\s:;"(),]+|"([^"]*)"|:|\(|\)|,|;/gi;
+            var myRegexp = /[^\s:;"()+\-=*,/]+|"([^"]*)"|:|\(|\)|,|\+|-|=|\*|\/|;/gi;
             //var myString = 'single words "fixed string of words"';
             var myArray = [];
 
@@ -619,7 +607,8 @@
         function drawall(){
             //ctx.clearRect(0,0,canvas.with,canvas.height);
             ctx.putImageData(imageData, 0, 0);
-            runNextLine();
+            hardware.processor.process();
+            
         }
 
         function buscaoCrea(n,arr,cbCrear){
@@ -647,10 +636,11 @@
         }
         function finalizaEdit(){
             bSubEnEdicion=false;
-            cursorColor1=1;cursorColor2=14;            
+            cursorColor1=1;cursorColor2=14;
         }
         function showcode(sub){
-            sub.forEach(element => println(element));
+            console.log('muestra sub',sub);
+            sub.forEach(element => println('>' + element));
         }
     
         function list(nombreSub){            
@@ -661,7 +651,8 @@
             showcode(sub);
             println('end sub')
         }
-        function listSubs(){            
+        function listSubs(){  
+            console.log('lists',sub,subs);
             println('')
             subs.forEach(element => println('sub '+element));
         }
@@ -847,6 +838,7 @@
                 if (bSubEnEdicion) {
                     if (command.toLowerCase()=="end sub") finalizaEdit();
                     else sub.push(command);
+                    console.log('guarda sub',sub);
                     panta.putChar(e.charCode)
                 } else {
                     panta.cursorNexLine(); 
@@ -859,10 +851,10 @@
                 k=e.charCode;
                 if(k !== 0) key_pressed_port_cd = k;
                 else {
-                    if(e.key.length === 1) {         
+                    if(e.key.length === 1) {
                         key_pressed_port_cd = e.key.toUpperCase().charCodeAt(0);
                     }
-                }                
+                }
                 hardware.processor.interrupt(false, 0x70); // trigger interrupt mode 2 (im 2), jumps at $0070     
                 console.log(key_pressed_port_cd);
             }

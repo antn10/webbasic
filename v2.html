@@ -1,0 +1,702 @@
+<meta charset="UTF-8">
+<!DOCTYPE html>
+    <head><title>webBASIC - LAVazquez 2021</title></head>
+    <style>body {
+        text-align: center;
+        background-color: rgb(53, 53, 53);        
+      }
+      canvas {
+        border: 5px solid #000;
+        background-color: white;
+        height: 90vh;        
+      }</style>
+    <body >
+        <div id="root">
+            <canvas id="myCanvas" width="256" height="192" >
+            </canvas>
+        </div>
+    </body>
+    <script>
+        var hardware={
+            memory:new Array(131072), // 128k
+            memorymap:{ rom: 0, // arranca en el cero a ejecutar
+                displayeach: 500, // milisegundos
+                displayfrom: 999,
+                displaytext: 1000, // aca empieza el buffer de pantalla
+                tokenports:1900, // 1900-1999 puertos
+                texttokens:2000, // espacio para 2000 tokens (tabla de funciones)
+                addresstokens:3000, // cada token tiene su address
+                fontpix: 4000,  // cada caracter tiene un string de 64 pixeles "xx--yy1122xxx----xxx   xxx--xd"
+                fontcolors: 4500,  // cada caracter puede tener un string de colores
+                keyboardindex: 5000,
+                keyboardcache: 5001,
+                displayfunction: 6000, // 
+                nextfunc: 6500, // dirección de la siguiente función
+                lastfunc: 6501, 
+                callstack:7000, //
+                stackposition:7000,     // "function":name;varname:value;
+                stack:9000, // goto 9561:'let','var','=','valor',':','let','var2','=','valor2','stop'
+            },
+            screen:{
+                cursorX:0,
+                cursorY:0,
+                page:0,
+                ink:1,
+                paper:6,
+                shadow:5, 
+                colores:[[31,31,31],[0,0,255],[255,0,0],[255,0,255],[0,255,0],[0,255,255],[255,255,0],[191,191,191],
+                        [0,0,0],[0,0,127],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[127,127,127],
+                        [127,127,127],[127,127,255],[127,0,0],[127,0,127],[0,127,0],[0,127,127],[127,127,0],[255,255,255]],
+
+                putChar: function (cod){ // dibuja un char y avanza el cursor
+                    this.dibujaChar(this.cursorX,this.cursorY,cod,this.colores[this.ink],this.colores[this.paper],this.colores[this.shadow]);
+                    if (cod==13) {this.cursorX=32;}
+                    else this.cursorX++;
+                    if (this.cursorX==32) {this.cursorX=0;this.cursorY++; if(this.cursorY==24) {this.cursorY=0;cls()}}
+                },
+
+                cursorNexLine:function (){
+                this.cursorX=0;this.cursorY++; if(this.cursorY==24) {this.cursorY=0;this.cls()}
+                },
+
+                getPixel: function (x, y) {
+                // retorna el color de un pixel en pantalla
+                    "use strict";
+                    var index = 0, r, g, b;
+                    index = (x + y * imageData.width) * 4;
+                    r = imageData.data[index];
+                    g = imageData.data[index + 1];
+                    b = imageData.data[index + 2];
+                    return [r, g, b];
+                },
+
+                setPixel: function (x, y, rgb) {
+                // pinta un pixel en pantalla cambiando imageData, no se hace visible hasta que se hace putImage, ver animate()
+                    "use strict";
+                    var index = 0;
+                    index = (x + y * imageData.width) * 4;
+                    imageData.data[index]     = rgb[0];
+                    imageData.data[index + 1] = rgb[1];
+                    imageData.data[index + 2] = rgb[2];
+                    imageData.data[index + 3] = 255;
+                },
+
+                dibujaChar: function (xx,yy,cod,cink,cpaper,cshadow){   //hace el char pero no avanza
+                    var x=xx*8,y=yy*8;                            
+                    if (cod>31) 
+                        if (hardware.memory[hardware.memorymap.fontpix+cod])
+                            for (var i=0;i<64;i++){                    
+                                if (hardware.memory[hardware.memorymap.fontpix+cod].charAt(i)=='X') 
+                                    this.setPixel(x,y,cink)
+                                else 
+                                    if (hardware.memory[hardware.memorymap.fontpix+cod].charAt(i)=='-') 
+                                        this.setPixel(x,y,this.colores[this.shadow])
+                                    else
+                                        this.setPixel(x,y,this.colores[this.paper])                                
+                                x++;if (x==xx*8+8){x=xx*8;y++}
+                            }
+                        else
+                            console.log('no definido codigo ',cod);
+                }
+            },
+            processor:{ 
+                        pc:Number=0, // program counter
+
+                        constructor(){
+                            //this.pc=0;
+                            this.s='';
+                            this.status=0;
+                        },
+
+                        getfunction:function(f){
+                            //retorna la direccion de una funcion
+                            var ret=0;
+                            for (let index = 0; index < 1000; index++)
+                                if(hardware.memory[index+hardware.memorymap.texttokens]==f) 
+                                    ret=hardware.memory[index+hardware.memorymap.addresstokens];                            
+                            return ret;
+                        },
+
+                        stackget: function (varname) {
+                            // busca a partir de stackposition, la variable varname
+                            // si la encuentra retorna el valor, si no retorna null
+                            var ret=null;
+                            //console.log('busca variable '+ varname);
+                            for (let index = 1; 
+                                 index < 1000; index+=2) {
+                                /*console.log('revisando stack',index,hardware.memorymap.stackposition,
+                                             hardware.memory[hardware.memorymap.stackposition+index],
+                                             hardware.memory[hardware.memorymap.stackposition+index+1]);
+                                  */  
+                                if (hardware.memory[hardware.memorymap.stackposition+index]==varname) 
+                                    ret=hardware[hardware.memorymap.stackposition+index+1];
+                                if (hardware.memory[hardware.memorymap.stackposition+index]==undefined) break;
+                            }
+                            return ret;
+                        },
+
+                        stackpop: function(){
+                        // elimina una llamada del stack
+                        // memorymap.callstack <-- dirección del primer elemento
+                        // memory[memorymap.callstack] <-- 0
+                        // memorymap.stackposition <-- dirección del ùltimo elemento
+                        // memory[memorymap.stackposition] <-- dirección del anterior elem
+                        var sp=hardware.memorymap.stackposition;
+                        //vuelve stackposition al anterior
+                        if (hardware.memory[sp]!=0)
+                            hardware.memorymap.stackposition=hardware.memory[sp];
+                        //vacía desde stackposition hasta el final
+                        for (let index = 0; index < 1000; index+=2) {
+                            if (hardware.memory[sp+index]==0) break 
+                            else {
+                                hardware.memory[sp+index]=0;     
+                                hardware.memory[sp+index+1]=0; 
+                            }
+                        }
+                        },
+
+
+                        stackpush: function(){
+                        // agrega una llamada al stack
+                        // busca primer lugar libre
+                        // guarda stackposition en ese lugar (posicion anterior)
+                        // apunta stackposition a esa dirección (ultimo lugar)
+
+                        },
+
+                            /* stackget:
+                            var vars=stackArray[stackArray.length-1];
+                            if (!vars) vars={};
+                            if (vars.hasOwnProperty(varname)){
+                                console.log('get es numerico',varname,isNumeric(vars[varname]))    
+                                if (isNumeric(vars[varname]))
+                                //if (Number.parseFloat(vars[varname]))
+                                    return Number.parseFloat(vars[varname])
+                                else
+                                    return vars[varname];
+                            }
+                            else{
+                                if (Number.parseFloat(varname))
+                                    return Number.parseFloat(varname)
+                                else                     
+                                    return varname;
+                            }*/
+
+                        process:function(){                        
+                            var t=hardware.memory; //tokenizar(this.s);
+                            var ejec='';
+                            if (t.length>0) ejec=t[this.pc];
+
+                            // si el comando es una funcion, la llama
+                            var f=this.getfunction(ejec);
+                            if (f!=0) {
+                            //if (subs.indexOf(ejec)>-1){
+                                //this.pc+=ejec.length;
+                                exprs=this.parseEXPR(',');
+                                //runStart(f,exprs);
+                            }
+
+                            
+                            // se espera un nuevo comando                            
+                            //while (this.pc<t.length){
+                            //console.log('process', t[this.pc],textTokens[t[this.pc]])
+                            ejec=t[this.pc++]; // lee y se mueve
+                            var cmd='';
+
+
+                            if (ejec==basicTokens.symDosP){console.log('saltea ":"')} // dos puntos no hace nada
+                            else if (ejec==basicTokens.help) hardware.processor.functions.help()
+                            else if (ejec==basicTokens.ink) hardware.screen.ink=this.parseEXPR('')  // Number.parseInt(t[1])                    
+                            else if (ejec==basicTokens.shadow) hardware.screen.shadow=this.parseEXPR('')
+                            else if (ejec==basicTokens.paper) hardware.screen.paper=this.parseEXPR('')
+                            else if (ejec==basicTokens.let) this.parseLET()
+                            else if (ejec==basicTokens.print) this.parsePRINT()
+                            else if (ejec==basicTokens.cls) hardware.screen.cls()
+                            else if (ejec==basicTokens.list) { var x=this.parseEXPR(''); if (x=='') listSubs(); else list(x)}
+                            else if (ejec==basicTokens.sub) edit(this.parseEXPR(''))
+                            else if (ejec==basicTokens.run){runStart(secondOr(t,'main'))}
+                            else if (ejec==basicTokens.pause){beginPause(secondOr(t,0))}
+                            else if (ejec==basicTokens.stop){this.pc--}
+                            else {
+                                    println( "error en [" + ejec +']'+basicTokens.symDosP);
+                                    //console.log(this.pc,hardware.memory);
+                                }                            
+                            //}
+                        },
+
+                        parsePRINT(){
+                            // imprime un conjunto de expresiones separadas por ';' hasta encontrar un ':', fin de línea (enter) o fin de sentencia
+                            var start=this.pc; 
+                            let valores=this.parseEXPR(';');
+                            valores.forEach(element => {
+                                s=element;
+                                if (s[0]=='"') s=element.substr(2,element.length-2);
+                                print(s);
+                            });
+
+                            // si no termina en ; agrega fin de línea
+                            //if (this.pc>1) if (this.s.charAt(this.pc-1)!=';') 
+                            var lbContinua=false;
+                            if (valores.length>0) if (valores[valores.length-1]==basicTokens.symPyC) 
+                                lbContinua=true;
+                            // si no hay punto y coma al final, agrega fin de línea
+                            if (!lbContinua) hardware.screen.cursorNexLine();
+                        },
+
+
+                        parseLET(){
+                            var varname='';
+                            var valor='';                
+                            // espera nombre de variable
+                            // si viene '=' 
+                            //    evalúa expresión y asigna
+                            while (this.pc<hardware.memory.length){
+
+                                // hasta que llega el = toma nombre de variable
+                                if (hardware.memory[this.pc]!='=') {
+                                    varname+=hardware.memory[this.pc];
+                                }
+                                // luego del = viene una expresión
+                                if (hardware.memory[this.pc]=='=') {                    
+                                    this.pc++;
+                                    //retorna lista de expresiones, para let sólo sirve el primero
+                                    valor=this.parseEXPR('');
+                                    stackassign(varname,valor[0]);
+                                }
+                                this.pc++;
+                            }              
+                        },
+
+                        parseAT(){
+                            this.pc+=3;
+                            var valoresFilaColumna=this.parseEXPR(',',';');
+                            if (valoresFilaColumna.length==2){
+                                this.cursorX=valoresFilaColumna[1];
+                                this.cursorY=valoresFilaColumna[0]; 
+                                //console.log('at',this.cursorX,this.cursorY);
+                            }
+
+                        },
+
+                        tokenlowstring:function(n){
+                            //retorna un string con los siguientes n caracteres a partir de i
+                            var res='';
+                            for (let index = 0; index < n; index++) {
+                                res+= hardware.memory[index];     
+                            }
+                            return res.toLowerCase();
+                        },
+
+                        token:function(){
+                            return textTokens[hardware.memory[this.pc]];
+                        },
+
+                        // expresiones validas: a)  1+2,"hola",5)   -- separador "," final ')' para llamada de función
+                        //                      b)  5;"hola";:      -- separador ";" final '' para comando print
+                        //                      c)  code(5)+(a*50)  -- separador ""  final '' para comando let
+                        parseEXPR:function(separador,charfinal=basicTokens.symDosP){ // 58=':'
+                            var inquotes=false, operacion='œ',operando='',considerarVariable=true;
+                            var c='',valores=[],valor='';comienzo=this.pc,subval='';
+                            // 1 espera nombre de variable
+                            // 2 espera '=' 
+                            // 3 evalúa expresión
+                            // espera nombre de variable
+
+                            //console.log('evalua EXPR1:',hardware.memory[this.pc],textTokens[hardware.memory[this.pc]]);
+
+                            while (this.pc<hardware.memory.length || hardware.memory[this.pc]!=charfinal){
+                                //log('if',this.s.charAt(this.pc),'=;',!inquotes)
+                               // console.log('evalua EXPR2:',hardware.memory[this.pc],textTokens[hardware.memory[this.pc]]);
+                                // si estoy en un print se evalúan expresiones AT,INK,PAPER,SHADOW,OVER
+                                if (separador==basicTokens.symPyC) { // ';'
+                                    //if (this.tokenlowstring(3)=='at ') this.parseAT();
+                                    if (hardware.memory[this.pc]==basicTokens.at) {
+                                        //console.log('evalua EXPR3: AT=',hardware.memory[this.pc]);
+                                        this.parseAT();
+                                    }
+                                    //if (this.s.substring(this.pc,this.pc+4)=='ink ') this.parseINK();
+                                } 
+                                while (this.pc<hardware.memory.length || (separador==hardware.memory[this.pc] && !inquotes) || (charfinal==hardware.memory[this.pc] && !inquotes)){
+                                    //console.log('parseEXPR',this.pc,this.s.charAt(this.pc),'charfinal',charfinal)
+                                    c=hardware.memory[this.pc];
+                                    //console.log('evalua EXPR4 loop1',c)
+                                    if (typeof c=='number') c=textTokens[c];
+
+                                    //console.log('evalua EXPR4 loop2',c)
+                                    if (c=="\"") {inquotes=!inquotes;considerarVariable=false;}
+                                    else
+                                        if (!inquotes && c==basicTokens.symOpenP) { // '('
+                                            // parentesis matemático
+                                            if (this.pc==comienzo || 
+                                                '*/+-'.includes(hardware.memory[this.pc-1])) {
+                                                //console.log('--sub expresión:',this.pc,operacion)200
+                                                //console.log('evalua EXPR5 parentesis matematico')
+                                                this.pc++;
+                                                let valores=this.parseEXPR('',')');
+                                                valor=valores[0];                                
+                                                c=this.s.charAt(this.pc); 
+                                                if (operacion!='œ') { // si tiene operación pendiente la realiza
+                                                    valor=calcula(operacion,operando,valor); 
+                                                    operacion='œ';operando='';
+                                                }
+                                                else console.log('retorno',valor,c,operacion);
+                                                
+                                            } else {
+                                                // paréntesis de función
+                                                //console.log('evalua EXPR5 parentesis función')
+                                                this.pc++; //saltear primer paréntesis
+                                                let params=this.parseEXPR(',',')'); // obtiene lista de expresiones para usar de parámetros                                                                        
+                                                ret = this.executeFunc(valor,params);
+                                                //console.log('ejecutado func',valor,params,ret);
+                                                valor=ret;                                    
+                                            }
+                                        } else
+                                        if (!inquotes && '+-*/'.includes(c)){
+                                            // si tiene una operación pendiente la finaliza
+                                            //console.log('evalua EXPR6 operación /*-+')
+                                            if (operacion!='œ') {
+                                                valor=calcula(operacion,operando,valor);                                                                        
+                                            }
+                                            // se inicializa la nueva operación
+                                            operacion=c; operando=valor; valor='';
+                                            //console.log('inicializa operacion',operando,operacion)
+                                        } else
+                                        if (inquotes || c!=' ') // procesa todo entre comillas, sin comillas se saltea el espacio
+                                            valor+=c; 
+                                        this.pc++;
+                                        console.log('evalua EXPR7 next')
+
+                                        //console.log('2do +1',this.pc)
+                                }
+                                if (operacion=='œ') {
+                                    console.log('evalua EXPR8 evaluar variable')
+                                    // para que valor sea una variable debe ser comenzar con alfabetico
+                                    if (((valor>64 && valor<123) || //console.log(valor,'es token alfabetico')
+                                       (valor[0]>='a' && valor[0]<='Z') ) && // console.log(valor,'es string alfabetico')
+                                       (considerarVariable)) valor=this.stackget(valor);
+                                }
+                                else
+                                {
+                                    console.log('evalua EXPR9 calcular')
+                                    res=calcula(operacion,operando,valor);
+                                    //console.log('operacion final',operando,operacion,valor,'=',res,this.pc,this.s.charAt(this.pc))
+                                    valor=res;
+                                        //console.log('se realiza operacion final',c,operando,valor,res)                            
+                                }         
+
+                                console.log('evalua EXPR10 push valor',valor,valores,typeof valor)
+
+                                // si tengo un token (algo numerico) se convierte a su valor
+                                if (typeof valor=='number') {
+                                        valor=textTokens(valor);
+                                        console.log('convertido a tokenstring', valor);
+                                } 
+
+                                valores.push(valor+'');
+                                valor='';
+                                //this.pc++;
+                                if (hardware.memory[this.pc]==separador) this.pc++;
+                                considerarVariable=true;
+                            }
+                          //  console.log('antes de salir expresión valor es ',valores)
+                        return valores;
+                        },
+                        
+
+                        interrupt:function(mode,address){}
+                      },
+            bus:{
+                peek:function(address){return hardware.memory[address];},
+                poke:function(address, value){hardware.memory[address]=value;},  
+                pokearr:function(address,values){ 
+                    let index=0;
+                    for (index = 0; index < values.length; index++) {
+                        hardware.memory[address+index] = values[index];
+                    }
+                },
+                // los puertos están en la ubicación 0x6000
+                io_read:function(port){return hardware.memory[hardware.memorymap.tokenports + port];},
+                io_write(port, value){ hardware.memory[hardware.memorymap.tokenports+port]=value;}
+            },
+            apps:{
+                addfunction:function(code,name){                    
+                    var t=tokenizar(code);
+                    var actualfunc=hardware.memorymap.nextfunc;
+                    hardware.memorymap.nextfunc+=t.length;
+                    hardware.memorymap.lastfunc++;
+                    hardware.bus.pokearr(actualfunc,t);
+                },
+                displayfunction:function(){                    
+                    var f="for i=1000 to 1768:print peek i;:next i";
+                    var t=tokenizar(f);
+                    hardware.bus.pokearr(hardware.memorymap.displayfunction,t);
+                }
+            }
+        }
+
+        function println(s){
+        // imprime un string en pantalla, y avanza el cursor a la siguiente linea
+            print(s);
+            hardware.screen.cursorNexLine();
+        }
+
+        function print(texto){
+        // imprime un string en pantalla 
+            let textobuff='' + texto;
+            for (var i=0;i<textobuff.length;i++)  {
+                hardware.screen.putChar(textobuff.charCodeAt(i));
+            }                
+        }        
+
+        function drawall(){
+            //ctx.clearRect(0,0,canvas.with,canvas.height);
+            ctx.putImageData(imageData, 0, 0);
+            hardware.processor.process();
+        }
+        
+
+        function splitQuot(s){
+        // convierte string s en array pero mantiene lo que hay dentro de comillas junto: palabra1 palabra2 "dos palabras" ==> array de 3
+            //The parenthesis in the regex creates a captured group within the quotes
+            var myRegexp = /[^\s:;"()+\-=*,/]+|"([^"]*)"|:|\(|\)|,|\+|-|=|\*|\/|;/gi;
+            //var myString = 'single words "fixed string of words"';
+            var myArray = [];
+            do {
+                //Each call to exec returns the next regex match as an array
+                var match = myRegexp.exec(s);
+                if (match != null)
+                {
+                   // console.log('match:',match,match[1] ? match[1] : match[0],match[0])
+                    //Index 1 in the array is the captured group if it exists
+                    //Index 0 is the matched text, which we use if no captured group exists
+                    //myArray.push(match[1] ? match[1] : match[0]);
+                    myArray.push(match[0]);
+                }
+            } while (match != null);    
+            return myArray;        
+        }
+
+        function tokenizar(s){
+        // convierte palabras clave en tokens            
+            var Words=splitQuot(s);
+            var tokens=[];
+            for (let index = 0; index < Words.length; index++) {
+                const element = Words[index];
+                var token=textTokens.indexOf(element);
+                if (token>0) tokens.push(token); // tokenWords[index]=token;    
+                else {
+                    //console.log('entra',token,element);
+                    tokens.push(element);
+                    // recorre la expresión y la agrega de a un carácter
+                    //for (let n = 0;  n<element.length; n++) {
+                    //    const caracter= element[n];
+                    //    console.log(caracter);
+                    //    tokens.push(caracter);
+                    //}
+                }
+            }
+           // console.log('resultado de tokenizar',tokens);
+            return tokens;
+        };
+
+        var textTokens=[ ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, // 0..31
+                         ' ','!','"','#','$','%','&','´',   '(',')','*','+',',','-','.','/',  //  32..47
+                         '0','1','2','3','4','5','6','7',   '8','9',':',';','<','=','>','?',         // 48..64
+                         '@','A','B','C','D','E','F','G',   'H','I','J','K','L','M','N','O',         // 65..79
+                         'P','Q','R','S','T','U','V','W',   'X','Y','Z','[','\\',']','^','_',         // 80..96
+                         '¢','a','b','c','d','e','f','g',   'h','i','j','k','l','m','n','o',         // 96..111
+                         'p','q','r','s','t','u','v','w',   'x','y','z','{','|','}','≈','º',         // 112..127
+                         '','','','','','','','',          '','','','','','','','',         // 128..143
+                         '','','','','','','','',          '','','','','','','','edit',         
+                         'del','sub','shadow','help','play','rnd','inkey$','pi',    'fn','point','screen$','attr','at','tab','val$','code', 
+                         'val','len','sin','cos','tan','asn','acs','atn',           'ln','exp','int','sqr','sgn','abs','peek','in',         
+                         'usr','str$','chr$','not','bin','or','and','<=',           '>=','<>','line','then','to','step','def fn','cat',
+                         'format','move','erase','open','close','merge','verify','beep',   'circle','ink','paper','flash','birght','inverse','over','out',
+                         'lprint','llist','stop','read','data','restore','new','border',   'continue','dim','rem','for','goto','gosub', 'input','load',
+                         'list','let','pause','next','poke','print','plot','run',   'save','randomize','if','cls','draw','clear','return','copy',
+                         'symbol','end sub','end if','di','ei','do','loop','end'
+                    ];
+        var basicTokens={
+            ' ':32, '!':33, '"':34, '#':35, '$':36, symPorc:37, symAmp:38, symTild:39,
+            symOpenP:40,symCloseP:41,symAster:42,symPlus:43, symComma:44,symMinus:45, symDot:46,
+            symDiv:47, num0:48,num1:49,num2:50,num3:51,num4:52,num5:53,num6:54,num7:55,num8:56,num9:57,
+            symDosP:58,symPyC:59,symMenor:60,symEq:61,symMayor:62,symQuest:63,symArroba:64,
+            A:65, B:66, C:67, D:68, E:69, F:70, G:71, H:72, I:73, J:74, K:75, L:76, M:77, N:78, O:79, P:80,
+            Q:81, R:82, S:83, T:84, U:85, V:86, W:87, X:88, Y:89, Z:90, symOpS:91, symSlash:92, symCloseS:93,
+            symElvado:94,symUnder:95, symLibra:96, a:97,b:98,c:99,d:100,e:101,f:102,g:103,h:104,i:105,j:106,
+            k:107,l:108,m:109,n:110,o:111,p:112,q:113,r:114,s:115,t:116,u:117,v:118,w:119,x:120,y:121,z:122,
+            edit:159,del:160,
+            sub:161,shadow:162, help:163,play:164,        rnd:165, inkey$:166, pi: 167, fn: 168, 
+            point: 169, screen$: 170, attr: 171,          at:172,   tab:173, val$:174,  code:175, 
+            val:176, len:177,   sin:178, cos:179,         tan:180,  asn:181, acs:182,  atn:183,  
+            ln:184,  exp:185,   int:186, sqr:187,         sgn:188,  abs:189, peek:190, in:191,  
+            usr:192,str$:193,chr$:194,not:195,            bin:196, or:197, and:198,lessequal:199,
+            moreequal:200,diff:201,line:202,then:203,     to:204,step:205,deffn:206,cat:207, 
+            format:208,move:209,erase:210,open:211,       close:212,merge:213,verify:214,beep:215,
+            circle:216,ink:217,paper:218,flash:219,       bright:220,inverse:221,over:222,out:223,
+            lprint:224,llist:225,stop:226,read:227,       data:228,restore:229,new:230,border:231,
+            continue:232,dim:233,rem:234,for:235,         goto:236,gosub:237,input:238,load:239,
+            list:240,let:241,pause:242,next:243,          poke:244,print:245,plot:246,run:247,
+            save:248,randomize:249,if:250,cls:251,        draw:252,clear:253,return:254,copy:255,
+            symbol:256,end_sub:257,end_if:258,di:259,ei:260,do:261,loop:262,end:263
+        };
+
+        var fonts=[,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+                   '                                                                ', //32-espacio
+                   '           X-      X-      X-      X-              X-           ',  //33-!
+                   '         X-  X-  X-  X-  X-  X-                                 ',  //34-"
+                   '          X-X-   XXXXX-   X-X-   XXXXX    X-X-                  ',  //35-#
+                   '           X-    XXXXX-  X-X-    XXXXX-    X-X-  XXXXX-    X    ',  //36-$
+                   '         XX- X-  XX-X-     X-     X-XX-  X- XX-                 ',  //37-%
+                   '           X-     X-X-     X-     X-X-X- X-  X-   XXX-X-        ',  //38-&
+                   '            X-     X-                                           ',  //39-'
+                   '   X-     X-      X-      X-      X-       X-                   ',  //40-(
+                   '           X-       X-      X-      X-      X-     X-           ',  //41-)
+                   '          X-X-     X-    XXXXX     X-     X-X-                  ',  //42-*
+                   '           X-      X-    XXXXX-    X-      X-                   ',  //43-+
+                   '                                            X-     X-           ',  //44-,
+                   '                         XXXXX-                                 ',  //45--
+                   '                                           XX-     XX-          ',  //46-.
+                   '              X-     X-     X-     X-     X-     X-             ',  //47-/
+                   '          XXX-   X- XX-  X-X-X-  XX- X-  X-  X-   XXX-          ', //48- 0
+                   '           X-     XX-      X-      X-      X-     XXX           ', //49- 1
+                   '          XXX-   X-  X-      X-   XXX-   X-      XXXXX-         ', //50-2
+                   '          XXX-   X-  X-    XX-       X-  X-  X-   XXX-          ', //51
+                   '            X-     XX-    X-X-   XXXXX-     X-      X-          ', //52
+                   '         XXXXX   X-      XXXX-       X-  X-  X-   XXX-          ', //53
+                   '          XXX-   X-      XXXX-   X-  X-  X-  X-   XXX-          ', //54
+                   '         XXXXX-      X-     X-     X-      X-      X-           ', //55
+                   '          XXX-   X-  X-   XXX-   X-  X-  X-  X-   XXX-          ', //56- 8
+                   '          XXX-   X-  X-   XXXX-      X-  X-  X-   XXX-          ', //57- 9
+                   '                           X-                      X-           ', //58- : 
+                   '                   X-              X-      X-     X-            ', //59- ;
+                   '           X-     X-     X-       X-       X-                   ', //60- <
+                   '                         XXXXX-          XXXXX-                 ', //61- =
+                   '          X-       X-       X-     X-     X-                    ', //62->
+                   '          XXX-   X-  X-      X-     X-     X-              X-   ', //63-?
+                   '          XXXX-  X- X-X- X-X-XX- X-XXXX- X-       XXXX-         ', //64-@
+                   '          XXX-   X-  X-  XXXXX-  X-  X-  X-  X-  X-  X-         ', //65-A
+                   '         XXXX-   X-  X-  XXXX-   X-  X-  X-  X-  XXXX-          ', //66-B
+                   '          XXX-   X-  X-  X-      X-      X-  X-   XXX-          ', //67-C
+                   '         XXXX-   X-  X-  X-  X-  X-  X-  X-  X-  XXXX-          ',
+                   '         XXXXX-  X-      XXXX-   X-      X-      XXXXX-         ',
+                   '         XXXXX-  X-      XXXX-   X-      X-      X-             ',
+                   '          XXX-   X-  X-  X-      X- XX-  X-  X-   XXX-          ',
+                   '         X-  X-  X-  X-  XXXXX-  X-  X-  X-  X-  X-  X-         ',
+                   '         XXXXX-    X-      X-      X-      X-    XXXXX-         ',
+                   '         XXXXX-      X-      X-      X-  X-  X-   XXX-          ',
+                   '         X-  X-  X- X-   X-X-    XX-X-   X-  X-  X-  X-         ',
+                   '         X-      X-      X-      X-      X-      XXXXX-         ',
+                   '         X-  X-  XX-XX-  X-X-X-  X-  X-  X-  X-  X-  X-         ',
+                   '         X-  X-  XX- X-  X-X-X-  X- XX-  X-  X-  X-  X-         ',
+                   '          XXX-   X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ',
+                   '         XXXX-   X-  X-  XXXX-   X-      X-      X-             ',
+                   '          XXX-   X-  X-  X-  X-  X-  X-  X- XX-   XX-X-         ',
+                   '         XXXX-   X-  X-  XXXX-   X-  X-  X-  X-  X-  X-         ',
+                   '          XXX-   X-       XXX-       X-  X-  X-   XXX-          ',
+                   '         XXXXXX-   X-      X-      X-      X-      X-           ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-   X-X-     X-           ',
+                   '         X-  X-  X-  X-  X-  X-  X-  X-  X-X-X-   X-X-          ',
+                   '         X-  X-   X-X-     X-     X-X-   X-  X-  X-  X-         ',
+                   '         X-  X-  X-  X-   XXX-     X-      X-      X-           ', //Y
+                   '         XXXXXX-     X-     X-     X-     X-     XXXXXX-        ', //Z
+                   '         XXXX-   X-      X-      X-      X-      XXXX-          ', //[
+                   '         X-       X-       X-       X-       X-       X-        ', //\
+                   '          XXXX-      X-      X-      X-      X-   XXXX-         ', //]
+                   '   X-     XXX-   X-X-X-    X-      X-      X-                   ', //†
+                   '                                                XXXXXXXX        ', //_
+                   '           XXX-   X-  X- XXXX-    X-      X-     XXXXX-         ', // £
+                   '                  XXX-       X-   XXXX-  X-  X-   XXXXX-        ', //a
+                   ' X-      X-      XXXX-   X-  X-  X-  X-  X-  X-  XXXX-          ', //b
+                   '                  XXXX-  X-      X-      X-       XXXX-         ', //c
+                   '     X-      X-   XXXX-  X-  X-  X-  X-  X-  X-   XXXX-         ', //d
+                   '                  XXX-   X-  X-  XXXXX-  X-       XXX-          ', //e
+                   '                   XXX-   X-      XXX-    X-      X-            ', //f
+                   '                  XXX-   X-  X-   XXXX-      X-   XXX-          ', //g
+                   '         X-      X-      XXXX-   X-  X-  X-  X-  X-  X-         ', //h
+                   '           X-             XX-      X-      X-     XXXX-         ', //i
+                   '             X-              X-      X-  X-  X-   XXX-          ', //j
+                   '                 X-      X- X-   XXX-    X- X-   X-  X-         ', //k
+                   '                  X-      X-      X-      X-       XX-          ', //l
+                   '                 XXXX-   X-X-X-  X-X-X-  X-X-X-  X-X-X-         ', //m
+                   '                 XXXX-   X-  X-  X-  X-  X-  X-  X-  X-         ', //n
+                   '                  XXX-   X-  X-  X-  X-  X-  X-   XXX-          ', //o
+                   '                 XXXX-   X-  X-  X-  X-  XXXX-   X-      X-     ', //p
+                   '                  XXXX-  X-  X-  X-  X-   XXXX-      X-      XX-', //q
+                   '                   XXX-   X-      X-      X-      X-            ', //r
+                   '                  XXX-   X-       XXX-       X-   XXX-          ', //s
+                   '           X-     XXX-     X-      X-      X-       XX-         ', //t
+                   '                 X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ', //u
+                   '                 X-  X-  X-  X-  X-  X-   X-X-     X-           ', //v
+                   '                 X-  X-  X-  X-  X-X-X-  X-X-X-   X-X-          ', //w
+                   '                 X-  X-   X-X-     X-     X-X-   X-  X-         ', //x
+                   '                 X-  X-  X-  X-   XXXX-      X-   XXX-          ', //y
+                   '                 XXXX-      X-     X-     X-     XXXX-          ', //z
+                   '          XXXX-   X-     X-       X-      X-      XXXX-         ', //{
+                   '           X-      X-      X-      X-      X-      X-           ', //|
+                   '         XXXX-      X-       X-     X-      X-   XXXX-          ', //}
+                   '          XX- X- X- XX-                                         ', //126 ~
+                   '                                                                ', //127®
+                   '                                                                ', //128®
+                   '                                                                ', //129®
+                   '                                                                ', //130®
+                   '                                                                ', //131®
+                   '                                                                ', //132®
+                   '                                                                ', //133®
+                   '                                                                ', //134®
+                   '                                                                ', //135®
+                   '                                                                ', //136®
+                   '                                                                ', //137®
+                   '                                                                ', //138®
+                   '                                                                ', //139®
+                   '                                                                ', //140®
+                   '                                                                ', //141®
+                   '                                                                ', //142®
+                   '                                                                ', //143®
+                   '                                                                ', //144®
+                   '                                                                ', //145®
+                   '                                                                ', //146®
+                   '                                                                ', //147®
+                   '                                                                ', //148®
+                   '                                                                ', //149®
+                   '                                                                ', //150®
+                   '                                                                ', //151®
+                   '                                                                ', //152®
+                   '                                                                ', //153®
+                   '                                                                ', //154®
+                   '                                                                ', //155®
+                   '                                                                ', //156®
+                   '                                                                ', //157®
+                   '                                                                ', //158®
+                   '                                                                ', //159®
+                   '                                                                ', //160®
+                   '                                                                ', //161®
+                   '               X  XXX-   X-  X-  X-  X-  X-  X-   XXX-          ', //o
+                   '                                                                ', //163®
+                   '                                                                ', //164®
+                   '                                                                ', //165®
+                   '                                                                ', //166®
+                   '                                                                ', //167®
+                   '                                                                ', //168®
+                   '                                                                ', //169®
+                  ];        
+
+        // sube los tokens a memoria
+        hardware.bus.pokearr(0,tokenizar('paper 6:print "comienzo":stop'));
+        hardware.bus.pokearr(hardware.memorymap.texttokens,textTokens);
+        // sube los tokens a memoria
+        hardware.bus.pokearr(hardware.memorymap.fontpix,fonts);
+        for (let index = 0; index < textTokens.length; index++) 
+           hardware.bus.poke(hardware.memorymap.addresstokens+index,0);
+        //console.log(hardware);
+        window.onload=setInterval(drawall,1000/10); 
+        
+        var canvas=document.querySelector('canvas');
+        var ctx=canvas.getContext('2d');
+        ctx.webkitImageSmoothingEnabled = false;
+        ctx.mozImageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled=false;
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    </script>
+</html>
