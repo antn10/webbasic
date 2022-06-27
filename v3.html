@@ -19,10 +19,13 @@
     <script>
         var hardware={
             memory:new Array(131072), // 128k
-
             sound:{ beep:  // type:0-4
                         function(duration, frequency, volume, type, callback) {
-                            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+                            window.AudioContext = window.AudioContext||window.webkitAudioContext;
+                            var audioCtx = new AudioContext();
+
+                            //var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
                             var oscillator = audioCtx.createOscillator();
                             var gainNode = audioCtx.createGain();
@@ -40,21 +43,23 @@
                         }
                 },
             systemvars:{
-                get cursoraddr() { return hardware.memory[hardware.memorymap.cursoraddress]},
-                set cursoraddr(val) {hardware.memory[hardware.memorymap.cursoraddress]=val;},
-
-                get displayfrom() { return hardware.memory[hardware.memorymap.displayfrom]}, 
-                set displayfrom(val) {hardware.memory[hardware.memorymap.displayfrom]=val;},
+                //get cursoraddr() { return hardware.memory[hardware.memorymap.cursoraddress]},
+                //set cursoraddr(val) {hardware.memory[hardware.memorymap.cursoraddress]=val;},
+                get cursoraddr() { return hardware.processor.tasks[hardware.processor.task].cursor},
+                set cursoraddr(val) {hardware.processor.tasks[hardware.processor.task].cursor=val},
+                //  hardware.memorymap.displayfrom
+                get displayfrom() { return hardware.processor.tasks[hardware.processor.task].screen},
+                set displayfrom(val) {hardware.processor.tasks[hardware.processor.task].screen=val;},
 
                 get displayeach() { return hardware.memory[hardware.memorymap.displayeach]}, 
                 set displayeach(val) {hardware.memory[hardware.memorymap.displayeach]=val;},
-
                 // el codigo no puede ser mayor que esto
-                get textlimit() { return hardware.memory[hardware.memorymap.textlimit]}, 
-                set textlimit(val) {hardware.memory[hardware.memorymap.textlimit]=val;},
-
-                get textend() { return hardware.memory[hardware.memorymap.textend]}, 
-                set textend(val) {hardware.memory[hardware.memorymap.textend]=val;},
+                get textfrom() { return hardware.processor.tasks[hardware.processor.task].textfrom}, 
+                set textfrom(val) {hardware.processor.tasks[hardware.processor.task].textfrom=val;},
+                get textlimit() { return hardware.processor.tasks[hardware.processor.task].textlimit}, 
+                set textlimit(val) {hardware.processor.tasks[hardware.processor.task].textlimit=val;},
+                get textend() { return hardware.processor.tasks[hardware.processor.task].textend}, 
+                set textend(val) {hardware.processor.tasks[hardware.processor.task].textend=val;},
             },
             memorymap:{ rom: 0, // arranca en el cero a ejecutar
                 //variables de sistema
@@ -79,8 +84,11 @@
             },
             screen:{
                 ciclos:0,//contador de ciclos para refrescar la pantalla
-                ink:1,
-                paper:6,
+                get ink() {return hardware.processor.tasks[hardware.processor.task].ink},
+                set ink(val) { hardware.processor.tasks[hardware.processor.task].ink=val},
+
+                get paper() {return hardware.processor.tasks[hardware.processor.task].paper},
+                set paper(val) { hardware.processor.tasks[hardware.processor.task].paper=val},
                 shadow:5, 
                 over:false,
                 cathodx:0,//
@@ -95,37 +103,35 @@
                 cursorX:function(){ return (hardware.systemvars.cursoraddr-hardware.systemvars.displayfrom) % 32; },
                 cursorY:function(){ return Math.floor((hardware.systemvars.cursoraddr-hardware.systemvars.displayfrom) / 32); }, 
 
-                moveCursor:function(desplazamiento){                                
+                moveCursor:function(desplazamiento){
                     if ((hardware.systemvars.cursoraddr+desplazamiento<hardware.systemvars.textlimit && desplazamiento>0) ||
-                        (hardware.systemvars.cursoraddr+desplazamiento>hardware.systemvars.displayfrom && desplazamiento<0))
-                        hardware.systemvars.cursoraddr+=desplazamiento;
-                    if (hardware.systemvars.cursoraddr>hardware.systemvars.textend) {
-                        hardware.systemvars.textend=hardware.systemvars.cursoraddr;                        
-                    }
-
-                    //console.log(hardware.systemvars.cursoraddr-hardware.systemvars.displayfrom);
+                        (hardware.systemvars.cursoraddr+desplazamiento>=hardware.systemvars.displayfrom && desplazamiento<0)){
+                            hardware.systemvars.cursoraddr+=desplazamiento;                            
+                        } else hardware.sound.beep(0,2,255)
+                    if (hardware.systemvars.cursoraddr>hardware.systemvars.textend) 
+                        hardware.systemvars.textend=hardware.systemvars.cursoraddr;    
                     if (hardware.systemvars.cursoraddr-hardware.systemvars.displayfrom<640) 
-                        this.scrollH=0                
+                        this.scrollH=0
                     else 
-                        this.scrollH=Math.floor(( hardware.systemvars.cursoraddr-hardware.systemvars.displayfrom)/ 32)-20;                                  
+                        this.scrollH=Math.floor(( hardware.systemvars.cursoraddr-hardware.systemvars.displayfrom)/ 32)-20;
                 },
 
                 putChar: function (cod){ // dibuja un char directo en pantalla 
-                    //console.log('putchar',cod,x,y);
                     var x=this.cathodx;
                     var y=this.cathody;
-
-                    if (this.paper=='') this.paper=6;                      
+                    var cx=this.cursorX();
+                    if (this.paper==='') { 
+                        console.log('papel vacio',this,this.paper,this.colores[this.paper]) ;
+                        this.paper=0; 
+                    }
                     if (cod<32) cod=32;
-                    //if (cod==65) console.log(x,y,cod,hardware.systemvars.displayfrom,hardware.systemvars.cursoraddr);
-                    //if(x==0 && y==0) console.log(cod);
                     this.dibujaChar(x,y,cod, this.colores[this.ink],
                                              this.colores[this.paper],
                                              this.colores[this.shadow]);
                     this.over=true;
                     if (cursorEnable)
                     // si coincide con el cursor dibuja el cursor
-                      if (this.cathodx==this.cursorX()) // 
+                      if (cx==this.cathodx) 
                         if (this.cathody==this.cursorY()-this.scrollH) { //
                             if (cursorBlinking) 
                                 this.dibujaChar(x,y,basicTokens.symUnder,this.colores[5],
@@ -143,17 +149,8 @@
                     //this.cathody;
                     if (this.cathodx==32) {this.cathodx=0;this.cathody++};                    
                     if (this.cathody==25){this.cathodx=0;this.cathody=0;};
-
-                    //if (this.cathodx==0 && this.cathody==0) console.log('cat',this.cathodx)
-
-                    },
+                },
                 
-
-                //cursorNexLine:function (){
-                //this.cursorX=0;this.cursorY++; if(this.cursorY==24) {this.cursorY=0;this.cls()}
-                //    this.putChar()
-                //},
-
                 getPixel: function (x, y) {
                 // retorna el color de un pixel en pantalla
                     "use strict";
@@ -169,12 +166,9 @@
                 // pinta un pixel en pantalla cambiando imageData, no se hace visible hasta que se hace putImage, ver animate()
                     "use strict";
                     var index = 0;
-                    //console.log('pixel',x,y,rgb);
                     index = (x + y * imageData.width) * 4;
-                    imageData.data[index]     = rgb[0];
-                    imageData.data[index + 1] = rgb[1];
-                    imageData.data[index + 2] = rgb[2];
-                    imageData.data[index + 3] = 255;
+                    imageData.data[index]     = rgb[0];   imageData.data[index + 1] = rgb[1];
+                    imageData.data[index + 2] = rgb[2];   imageData.data[index + 3] = 255;
                 },
 
                 dibujaChar: function (xx,yy,cod,cink,cpaper,cshadow){   //hace el char pero no avanza
@@ -199,26 +193,31 @@
 
                 cls: function()
                 {   
-                this.cursorX=0;this.cursorY=0;
-                print( 
-                "                                                                                                "+
-                "                                                                                                "+
-                "                                                                                                "+
-                "                                                                                                " +
-                "                                                                                                "+
-                "                                                                                                "+
-                "                                                                                                "+
-                "                                                                                               "
-                );
-                //imprime el ultimo sin movimiento de cursor para que no se ejecute cls en ciclo
-                //this.dibujaChar(this.cursorX,this.cursorY,32,this.colores[this.ink],this.colores[this.paper],this.colores[this.shadow]);
-                //this.cursorX=0;this.cursorY=0;
+                    this.cursorX=0;this.cursorY=0;
+                    print( 
+                    "                                                                                                "+
+                    "                                                                                                "+
+                    "                                                                                                "+
+                    "                                                                                                " +
+                    "                                                                                                "+
+                    "                                                                                                "+
+                    "                                                                                                "+
+                    "                                                                                               "
+                    );
                 },
-
             },
 
             processor:{ 
                         pc:Number=0, // program counter
+                        task:1,
+                        // si hago load "pepe", carga el codigo en EDIT y 
+                        // si hago run se muestra el resultado en RUNNING
+                        // si hago print 1 en inmediate se muestra en running?
+                        // code:100 contiene código que inicializa la tarea
+                        // code:1000
+                        tasks: [{nombre:'inmediate',code:1000, screen:2000,cursor:2000, textend:2000,ink:7, paper:0, textlimit:2999, textfrom:2000},
+                                {nombre:'edit',     code:100,  screen:3000,cursor:3000, textend:3000,ink:9, paper:7, textlimit:3999, textfrom:3000}, 
+                                {nombre:'running',  code:6000, screen:4000,cursor:4000, textend:4000,ink:3, paper:9, textlimit:4999, textfrom:4000}],
 
                         constructor(){
                             //this.pc=0;
@@ -230,7 +229,7 @@
                             //retorna la direccion de una funcion
                             var ret=0;
                             for (let index = 0; index < 1000; index++)
-                                if(hardware.memory[index+hardware.memorymap.texttokens]==f) 
+                                if(hardware.memory[index+hardware.memorymap.addresstokens]==f) 
                                     ret=hardware.memory[index+hardware.memorymap.addresstokens];                            
                             return ret;
                         },
@@ -302,31 +301,30 @@
 
                         process:function(){                        
                             var t=hardware.memory; //tokenizar(this.s);
-                            var ejec='';
-                            if (t.length>0) ejec=t[this.pc];
+                            var ejec;
+                            // se espera un nuevo comando                            
+                            //while (this.pc<t.length){
+                            //console.log('process', t[this.pc],textTokens[t[this.pc]])
+                            //console.log('task',this.tasks[this.task])
+                            
+                            ejec=t[this.pc++]; // lee y se mueve
+                            // en caso de stop no hace nada
+                            if (ejec==basicTokens.stop) { this.pc--;return};
+                            var cmd='';
+                            console.log('ejecuta',ejec);
 
                             // si el comando es una funcion, la llama
                             var f=this.getfunction(ejec);
                             if (f!=0) {
-                            //if (subs.indexOf(ejec)>-1){
-                                //this.pc+=ejec.length;
-                                exprs=this.parseEXPR(basicTokens.symComma);
-                                //runStart(f,exprs);
+                                exprs=this.parseEXPR(basicTokens.symComma);                                
                             }
-
-                            
-                            // se espera un nuevo comando                            
-                            //while (this.pc<t.length){
-                            //console.log('process', t[this.pc],textTokens[t[this.pc]])
-                            ejec=t[this.pc++]; // lee y se mueve
-                            var cmd='';
-
 
                             if (ejec==basicTokens.symDosP){} // dos puntos no hace nada
                             else if (ejec==basicTokens.help) hardware.processor.functions.help()
                             else if (ejec==basicTokens.ink) hardware.screen.ink=this.parseEXPR('')  // Number.parseInt(t[1])                    
                             else if (ejec==basicTokens.shadow) hardware.screen.shadow=this.parseEXPR('')
-                            else if (ejec==basicTokens.paper) hardware.screen.paper=this.parseEXPR('')
+                            else if (ejec==basicTokens.paper) {//hardware.screen.paper=this.parseEXPR('');console.log('paper codigo')
+                            }
                             else if (ejec==basicTokens.let) this.parseLET()
                             else if (ejec==basicTokens.print) this.parsePRINT()
                             else if (ejec==basicTokens.goto) this.parseGOTO()
@@ -356,12 +354,13 @@
                                 if (isNaN(donde[0]))
                                     this.raiseError('goto no recibe número')
                                 else
-                                    this.pc=donde[0];
+                                    this.tasks[this.task].pc=donde[0];
                         },
 
                         parsePRINT(){
                             // imprime un conjunto de expresiones separadas por ';' hasta encontrar un ':', fin de línea (enter) o fin de sentencia
                             var start=this.pc; 
+                            console.log('entra print')
                             let valores=this.parseEXPR(basicTokens.symPyC);
                             valores.forEach(element => {
                                 s=element;
@@ -437,30 +436,40 @@
                         parseEXPR:function(separador,charfinal=basicTokens.symDosP){ // 58=':'
                             var inquotes=false, operacion='œ',operando='',considerarVariable=true;
                             var c='',valores=[],valor='';comienzo=this.pc,subval='';
+                            console.log('entra expr')
                             
                             //una expresión no debería ser tan larga, evalua 2000 caracteres màximo
                             for (let index = 0; index < 3000; index++) {                                
                                 const element = hardware.memory[this.pc++];
 
-                                if (element==charfinal)                                    
-                                    break; //console.log(element,'charfinal',charfinal)
+                                if (element==charfinal){
+                                    console.log(element,'charfinal',charfinal)
+                                    break; 
+                                }
                                 else
                                 if (element==separador){                                    
-                                    valores.push(valor); //console.log(element,'separador',separador)
+                                    valores.push(valor); console.log(element,'separador',separador)
                                     valor="";
                                 } else if (typeof element=='number') // procesa token
                                 {
-                                    if (element>122) 
-                                        t=this.parseFunction()//console.log(element,'token-llama funcion')                                    
-                                    else 
-                                        t=textTokens[element];//console.log(element,'agrega texto',t)                                    
+                                    if (element>122) {
+                                      //  t=this.parseFunction();console.log(element,'token-llama funcion')                                    
+                                    }
+                                    else {
+                                        t=textTokens[element]; //console.log(element,'agrega texto',t)
+                                    }
                                    valor+=t;
-                                } else {
-                                   valor+=element; //console.log(element,'literal');
+                                } else if (typeof(element)=='undefined') {
+                                    console.log('error undefined in code index:',this.pc);
+                                    break;
+                                } else
+                                {
+                                   valor+=element; console.log(element,'literal');
                                 };
                             }
                             valores.push(valor);                            
-                            return valores; // console.log(valores);
+                            console.log(valores);
+                            return valores;  
                         },
                                 
                         /*  
@@ -622,7 +631,9 @@
             let textobuff='' + texto;
             for (var i=0;i<textobuff.length;i++)  {
                 var k=texto.charCodeAt(i);
+                //console.log('p',hardware.systemvars.cursoraddr)
                 hardware.bus.poke(hardware.systemvars.cursoraddr,k);
+                //console.log('pone',hardware.systemvars.cursoraddr,k)
                 //console.log(k,hardware.systemvars.cursoraddr,hardware.memory[hardware.systemvars.cursoraddr]);
                 hardware.screen.moveCursor(1);
             }                
@@ -666,7 +677,7 @@
         function splitQuot(s){
         // convierte string s en array pero mantiene lo que hay dentro de comillas junto: palabra1 palabra2 "dos palabras" ==> array de 3
             //The parenthesis in the regex creates a captured group within the quotes
-            var myRegexp = /[^\s:;"()+\-=*,/]+|"([^"]*)"|:|\(|\)|,|\+|-|=|\*|\/|;/gi;
+            var myRegexp = /[^\s:;"()+\-=*,/\x00]+|"([^"]*)"|:|\(|\)|,|\+|-|=|\*|\/|;/gi;
             //var myString = 'single words "fixed string of words"';
             var myArray = [];
             do {
@@ -678,6 +689,7 @@
                     //Index 1 in the array is the captured group if it exists
                     //Index 0 is the matched text, which we use if no captured group exists
                     //myArray.push(match[1] ? match[1] : match[0]);
+                    //console.log('match',match[0].length,match[0]),match[0].charAt(match.length-1);
                     myArray.push(match[0]);
                 }
             } while (match != null);    
@@ -686,14 +698,17 @@
 
         function tokenizar(s){
         // convierte palabras clave en tokens            
-            var Words=splitQuot(s);
+            var Words=splitQuot(s.trim());
             var tokens=[];
             for (let index = 0; index < Words.length; index++) {
-                const element = Words[index];
+                const element = Words[index].trim();
                 var token=textTokens.indexOf(element);
+                //console.log('busca',element,token,element=='cls',element.length,element.charAt(3),textTokens.indexOf('cls'),textTokens.indexOf(element))
+                //console.log('INDEXOF',textTokens.indexOf('cls'));
+
                 if (token>0) tokens.push(token); // tokenWords[index]=token;    
                 else {
-                    //console.log('entra',token,element);
+                    //console.log('entra',token,element,'no encontrado');
                     tokens.push(element);
                     // recorre la expresión y la agrega de a un carácter
                     //for (let n = 0;  n<element.length; n++) {
@@ -707,7 +722,7 @@
             return tokens;
         };
 
-        var textTokens=[ ,,,,,,,, ,,,,,,,, ,,,,,,,, ,,,,,,,, // 0..31
+        var textTokens=[ ' ',,,,,,,, ,,,,,'/',,, ,,,,,,,, ,,,,,,,, // 0..31
                          ' ','!','"','#','$','%','&','´',   '(',')','*','+',',','-','.','/',  //  32..47
                          '0','1','2','3','4','5','6','7',   '8','9',':',';','<','=','>','?',         // 48..64
                          '@','A','B','C','D','E','F','G',   'H','I','J','K','L','M','N','O',         // 65..79
@@ -769,11 +784,11 @@
                    '          XXX-   X- XX-  X-X-X-  XX- X-  X-  X-   XXX-          ', //48- 0
                    '           X-     XX-      X-      X-      X-     XXX           ', //49- 1
                    '          XXX-   X-  X-      X-   XXX-   X-      XXXXX-         ', //50-2
-                   '          XXX-   X-  X-    XX-       X-  X-  X-   XXX-          ', //51
-                   '            X-     XX-    X-X-   XXXXX-     X-      X-          ', //52
-                   '         XXXXX   X-      XXXX-       X-  X-  X-   XXX-          ', //53
-                   '          XXX-   X-      XXXX-   X-  X-  X-  X-   XXX-          ', //54
-                   '         XXXXX-      X-     X-     X-      X-      X-           ', //55
+                   '          XXX-   X-  X-    XX-       X-  X-  X-   XXX-          ', //51-3
+                   '            X-     XX-    X-X-   XXXXX-     X-      X-          ', //52-4
+                   '         XXXXX   X-      XXXX-       X-  X-  X-   XXX-          ', //53-5
+                   '          XXX-   X-      XXXX-   X-  X-  X-  X-   XXX-          ', //54-6
+                   '         XXXXX-      X-     X-     X-      X-      X-           ', //55-7
                    '          XXX-   X-  X-   XXX-   X-  X-  X-  X-   XXX-          ', //56- 8
                    '          XXX-   X-  X-   XXXX-      X-  X-  X-   XXX-          ', //57- 9
                    '                           X-                      X-           ', //58- : 
@@ -807,36 +822,36 @@
                    '         X-  X-  X-  X-  X-  X-  X-  X-   X-X-     X-           ',
                    '         X-  X-  X-  X-  X-  X-  X-  X-  X-X-X-   X-X-          ',
                    '         X-  X-   X-X-     X-     X-X-   X-  X-  X-  X-         ',
-                   '         X-  X-  X-  X-   XXX-     X-      X-      X-           ', //Y 89
-                   '         XXXXXX-     X-     X-     X-     X-     XXXXXX-        ', //Z
-                   '         XXXX-   X-      X-      X-      X-      XXXX-          ', //[
-                   '         X-       X-       X-       X-       X-       X-        ', //\
-                   '          XXXX-      X-      X-      X-      X-   XXXX-         ', //]
-                   '   X-     XXX-   X-X-X-    X-      X-      X-                   ', //†
-                   '                                                XXXXXXXX        ', //_
-                   '           XXX-   X-  X- XXXX-    X-      X-     XXXXX-         ', // £
-                   '                  XXX-       X-   XXXX-  X-  X-   XXXXX-        ', //a
-                   ' X-      X-      XXXX-   X-  X-  X-  X-  X-  X-  XXXX-          ', //b
-                   '                  XXXX-  X-      X-      X-       XXXX-         ', //c
-                   '     X-      X-   XXXX-  X-  X-  X-  X-  X-  X-   XXXX-         ', //d
-                   '                  XXX-   X-  X-  XXXXX-  X-       XXX-          ', //e
-                   '                   XXX-   X-      XXX-    X-      X-            ', //f
-                   '                  XXX-   X-  X-   XXXX-      X-   XXX-          ', //g
-                   '         X-      X-      XXXX-   X-  X-  X-  X-  X-  X-         ', //h
-                   '           X-             XX-      X-      X-     XXXX-         ', //i
-                   '             X-              X-      X-  X-  X-   XXX-          ', //j
-                   '                 X-      X- X-   XXX-    X- X-   X-  X-         ', //k
-                   '                  X-      X-      X-      X-       XX-          ', //l
-                   '                 XXXX-   X-X-X-  X-X-X-  X-X-X-  X-X-X-         ', //m
-                   '                 XXXX-   X-  X-  X-  X-  X-  X-  X-  X-         ', //n
-                   '                  XXX-   X-  X-  X-  X-  X-  X-   XXX-          ', //o
-                   '                 XXXX-   X-  X-  X-  X-  XXXX-   X-      X-     ', //p
-                   '                  XXXX-  X-  X-  X-  X-   XXXX-      X-      XX-', //q
-                   '                   XXX-   X-      X-      X-      X-            ', //r
-                   '                  XXX-   X-       XXX-       X-   XXX-          ', //s
-                   '           X-     XXX-     X-      X-      X-       XX-         ', //t
-                   '                 X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ', //u
-                   '                 X-  X-  X-  X-  X-  X-   X-X-     X-           ', //v
+                   '         X-  X-  X-  X-   XXX-     X-      X-      X-           ', //89-Y
+                   '         XXXXXX-     X-     X-     X-     X-     XXXXXX-        ', //90-Z
+                   '         XXXX-   X-      X-      X-      X-      XXXX-          ', //91-[
+                   '         X-       X-       X-       X-       X-       X-        ', //92-\
+                   '          XXXX-      X-      X-      X-      X-   XXXX-         ', //93-]
+                   '   X-     XXX-   X-X-X-    X-      X-      X-                   ', //94-†
+                   '                                                XXXXXXXX        ', //95-_
+                   '           XXX-   X-  X- XXXX-    X-      X-     XXXXX-         ', //96 £
+                   '                  XXX-       X-   XXXX-  X-  X-   XXXXX-        ', //97-a
+                   ' X-      X-      XXXX-   X-  X-  X-  X-  X-  X-  XXXX-          ', //98-b
+                   '                  XXXX-  X-      X-      X-       XXXX-         ', //99-c
+                   '     X-      X-   XXXX-  X-  X-  X-  X-  X-  X-   XXXX-         ', //100-d
+                   '                  XXX-   X-  X-  XXXXX-  X-       XXX-          ', //101-e
+                   '                   XXX-   X-      XXX-    X-      X-            ', //102-f
+                   '                  XXX-   X-  X-   XXXX-      X-   XXX-          ', //103-g
+                   '         X-      X-      XXXX-   X-  X-  X-  X-  X-  X-         ', //104-h
+                   '           X-             XX-      X-      X-     XXXX-         ', //105-i
+                   '             X-              X-      X-  X-  X-   XXX-          ', //106-j
+                   '                 X-      X- X-   XXX-    X- X-   X-  X-         ', //107-k
+                   '                  X-      X-      X-      X-       XX-          ', //108-l
+                   '                 XXXX-   X-X-X-  X-X-X-  X-X-X-  X-X-X-         ', //109-m
+                   '                 XXXX-   X-  X-  X-  X-  X-  X-  X-  X-         ', //110-n
+                   '                  XXX-   X-  X-  X-  X-  X-  X-   XXX-          ', //111-o
+                   '                 XXXX-   X-  X-  X-  X-  XXXX-   X-      X-     ', //112-p
+                   '                  XXXX-  X-  X-  X-  X-   XXXX-      X-      XX-', //113-q
+                   '                   XXX-   X-      X-      X-      X-            ', //114-r
+                   '                  XXX-   X-       XXX-       X-   XXX-          ', //115-s
+                   '           X-     XXX-     X-      X-      X-       XX-         ', //116-t
+                   '                 X-  X-  X-  X-  X-  X-  X-  X-   XXX-          ', //117-u
+                   '                 X-  X-  X-  X-  X-  X-   X-X-     X-           ', //118-v
                    '                 X-  X-  X-  X-  X-X-X-  X-X-X-   X-X-          ', //w
                    '                 X-  X-   X-X-     X-     X-X-   X-  X-         ', //x
                    '                 X-  X-  X-  X-   XXXX-      X-   XXX-          ', //y
@@ -898,42 +913,64 @@
             return e.charCode;
         }
 
+        function getLinea(){
+            var ret = '';
+            // toma desde textfrom hasta +31 todo el texto
+            for (let index = 0; index < 31; index++) ret = ret + String.fromCharCode(hardware.memory[hardware.systemvars.textfrom+index]);
+            return ret;
+        }
+        function getLineaTokenizada(){
+            return tokenizar(getLinea());
+        }
+        function runLine(){
+            var tk=getLineaTokenizada()
+            tk.push(basicTokens.stop)
+            hardware.bus.pokearr(hardware.processor.tasks[hardware.processor.task].code,tk);
+            //para que ejecute sólo muevo el pc
+            hardware.processor.pc=hardware.processor.tasks[hardware.processor.task].code;
+        }
+
         function onKeypressExecute(e){
             if (bPausa && e.key=='Enter') endPause();            
 
             var k=getKeyAscii(e,hardware.memory[hardware.memorymap.cursoraddress]);
             if (e.key=='Enter') {
-                // busca el final del texto y mueve todo 32 caracteres más
-
-                final=hardware.systemvars.textend;                
-                limite=hardware.systemvars.textlimit;
-                nextline=Math.floor((hardware.systemvars.cursoraddr+32)/32)*32;
-
-                // copia todas las lineas 32 caracteres mas adelante
-                if (final+32<limite){
-                    if (nextline<final){
-                        hardware.systemvars.textend+=32;
-                        for (let index = final+32; index > nextline; index--) 
-                            hardware.memory[index] = hardware.memory[index-32];                        
+                if (hardware.processor.task==1){
+                    // busca el final del texto y mueve todo 32 caracteres más
+                    final=hardware.systemvars.textend;                
+                    limite=hardware.systemvars.textlimit;
+                    nextline=Math.floor((hardware.systemvars.cursoraddr+32)/32)*32;
+    
+                    // copia las lineas hasta el final 32 caracteres mas adelante
+                    if (final+32<limite){
+                        if (nextline<final){
+                            hardware.systemvars.textend+=32;
+                            //mueve todo 32 caracteres
+                            for (let index = final+32; index > nextline+31; index--) 
+                                hardware.memory[index] = hardware.memory[index-32];                        
+                        }
                     }
-                }
-                // copia y borra el resto de la linea
-                var dif=32-hardware.screen.cursorX();
-                for (var x=hardware.screen.cursorX(); x < 32; x++) {
-                    hardware.memory[hardware.systemvars.cursoraddr+dif]=hardware.memory[hardware.systemvars.cursoraddr];
-                    hardware.memory[hardware.systemvars.cursoraddr]=32;                    
-                    hardware.screen.moveCursor(1);
-                }
+                    // copia y borra el resto de la linea
+                    var dif=32-hardware.screen.cursorX();
+                    for (var x=0; x < dif; x++) {
+                        hardware.memory[hardware.systemvars.cursoraddr+dif+x]=hardware.memory[hardware.systemvars.cursoraddr+x];
+                        hardware.memory[hardware.systemvars.cursoraddr+x]=32;                    
+                    }
+                    hardware.screen.moveCursor(dif);
+                } else if (hardware.processor.task==0)
+                    runLine();
+                
                 hardware.sound.beep(0.3,1000,255);
             }else{
-                hardware.sound.beep(0.3,4000,255);
-                // los siguientes caracteres de la linea se mueven a la derecha 1 lugar
-                for (let index = 30-hardware.screen.cursorX(); index >=0; index--) {
-                    hardware.memory[hardware.systemvars.cursoraddr+index]=
-                    hardware.memory[hardware.systemvars.cursoraddr+index-1];
-                }; 
-                hardware.bus.poke(hardware.systemvars.cursoraddr,k);                
-                hardware.screen.moveCursor(1);                
+                    hardware.sound.beep(0.3,4000,255);
+                    // los siguientes caracteres de la linea se mueven a la derecha 1 lugar
+                    for (let index = 30-hardware.screen.cursorX(); index >=0; index--) {
+                        hardware.memory[hardware.systemvars.cursoraddr+index]=
+                        hardware.memory[hardware.systemvars.cursoraddr+index-1];
+                    }; 
+                    //console.log(hardware.systemvars.cursoraddr)
+                    hardware.bus.poke(hardware.systemvars.cursoraddr,k);                
+                    hardware.screen.moveCursor(1);                
             }            
             /* if (e.key=='Enter') {
                 if (bSubEnEdicion) {
@@ -949,23 +986,90 @@
             }*/
         }
 
-        function onKeydownExecute(){
+        function onKeydownExecute(e){
             cursorEnable=false;
+            if (e.key=='Escape'){                    
+                    hardware.processor.task++;
+                    if (hardware.processor.task==3) hardware.processor.task=0;                    
+                    hardware.sound.beep(1,40,255);
+            }            
             //hardware.screen.dibujaChar(hardware.screen.cursorX,hardware.screen.cursorY,32,hardware.screen.colores[cursorColor2],hardware.screen.colores[cursorColor1],hardware.screen.colores[cursorColor2]);    
         }
+        function onClickExecute(e){
+            if (hardware.processor.task==1){
+                var x=Math.floor(e.offsetX*(canvas.width/canvas.clientWidth))
+                var y=Math.floor(e.offsetY*(canvas.height/canvas.clientHeight))
+                var pix=hardware.screen.getPixel(x,y);
+                pix[1]=50;
+                hardware.screen.setPixel(x,y,pix);
+                hardware.systemvars.cursoraddr = hardware.systemvars.displayfrom + Math.floor(x/8)+ Math.floor(y/8)*32 + hardware.screen.scrollH*32;
+            }
+        }
+
+        function getHistoryCmd(paso){
+
+        }
+    
 
         function onKeyupExecute(e){
             if (e.key=='Backspace') {
-                for (let index = 0; index < 31-hardware.screen.cursorX(); index++) {                    
-                    hardware.memory[hardware.systemvars.cursoraddr+index-1]=
-                    hardware.memory[hardware.systemvars.cursoraddr+index];
-                };
-                hardware.memory[hardware.systemvars.cursoraddr+31-hardware.screen.cursorX()]=32;
-                hardware.screen.moveCursor(-1);
+                // si estoy en la primer columna, copia la linea
+                if (hardware.screen.cursorX()==0 && hardware.processor.task==1){
+
+                    //busca el ultimo caracter con texto                  
+                    lastcharacter=-1;
+                    for (let index = hardware.systemvars.cursoraddr-1; index > hardware.systemvars.cursoraddr-32; index--) {                        
+                        if (hardware.memory[index]!=32 && hardware.memory[index]!=0){                            
+                            lastcharacter=index;
+                            break;                        
+                        }
+                    }
+                    if (lastcharacter==-1) lastcharacter=hardware.systemvars.cursoraddr-33;
+                    // copia la linea hacia arriba luego del ultimo caracter
+                    var restar=hardware.systemvars.cursoraddr-lastcharacter-1;                    
+                    for (let index = lastcharacter+1; index < hardware.systemvars.cursoraddr; index++) {
+                        hardware.memory[index]=hardware.memory[index+restar];
+                        hardware.memory[index+restar]=32;
+                    }
+                    //mueve todo -32 caracteres desde cursor+32 para eliminar linea en blanco                    
+                    for (let index = hardware.systemvars.cursoraddr+32-hardware.screen.cursorX(); 
+                         index < hardware.systemvars.textend+32 ; index++)
+                        hardware.memory[index-32] = hardware.memory[index];                    
+
+                    hardware.systemvars.cursoraddr=lastcharacter+1;
+                }
+                else
+                {
+                    for (let index = 0; index < 31-hardware.screen.cursorX(); index++) {                    
+                        hardware.memory[hardware.systemvars.cursoraddr+index-1]=
+                        hardware.memory[hardware.systemvars.cursoraddr+index];
+                    };
+                    hardware.memory[hardware.systemvars.cursoraddr+31-hardware.screen.cursorX()]=32;
+                    hardware.screen.moveCursor(-1);
+                }
             }
-            if (e.key=='ArrowUp') hardware.screen.moveCursor(-32);
-            if (e.key=='ArrowDown') hardware.screen.moveCursor(32);
-            if (e.key=='ArrowLeft') hardware.screen.moveCursor(-1);
+            if (e.key=='ArrowUp') 
+                if(hardware.processor.task==0) getHistoryCmd(-1);
+                else if (hardware.processor.task==1) hardware.screen.moveCursor(-32);
+            if (e.key=='ArrowDown') 
+                if(hardware.processor.task==0) getHistoryCmd(1);
+                else if (hardware.processor.task==1) hardware.screen.moveCursor(32);
+            if (e.key=='ArrowLeft') {                
+                if (hardware.screen.cursorX()>0)
+                    dif=-1
+                else if (hardware.processor.task==1) {
+                    lastcharacter=-1;
+                    for (let index = hardware.systemvars.cursoraddr-1; index > hardware.systemvars.cursoraddr-32; index--) {                        
+                        if (hardware.memory[index]!=32 && hardware.memory[index]!=0){                            
+                            lastcharacter=index;
+                            break;    
+                        }
+                    }
+                    if (lastcharacter==-1) dif=-32;
+                    else dif=lastcharacter-hardware.systemvars.cursoraddr;
+                }  else dif=0;
+                hardware.screen.moveCursor(dif);
+            }
             if (e.key=='ArrowRight') hardware.screen.moveCursor(1);
             if (e.key=='PageUp') hardware.screen.moveCursor(-32*24);
             if (e.key=='PageDown') hardware.screen.moveCursor(32*24);
@@ -975,20 +1079,32 @@
 
         //inicializar sistema        
         // sube los tokens a memoria
-        hardware.bus.pokearr(0,tokenizar('paper 7:print "Comienzo":print "X":stop:goto 2000'));
-        hardware.bus.pokearr(hardware.memorymap.texttokens,textTokens);
+        hardware.bus.pokearr(0,tokenizar('print "Comienzo":print "X":stop:goto 2000'));
+        // hardware.bus.pokearr(hardware.memorymap.TE ,textTokens);
+
         //vacia la pantalla
-        hardware.systemvars.displayfrom=2048; // acá empieza la memoria de video
-        hardware.systemvars.cursoraddr=2048; // acá el cursor de texto
-        hardware.systemvars.textend=2048; // acá el cursor de texto
-        hardware.systemvars.textlimit=8192; // acá el cursor de texto
-        hardware.systemvars.displayeach=10;
-        console.log('inicializado memoria de video y cursor',hardware.systemvars.displayfrom,hardware.systemvars.cursoraddr);
+        //hardware.systemvars.displayfrom=2048; // acá empieza la memoria de video
+        //hardware.systemvars.cursoraddr=2048; // acá el cursor de texto
+        //hardware.systemvars.textend=2048; // acá el cursor de texto
+        //hardware.systemvars.textlimit=8192; // acá el cursor de texto
+        hardware.systemvars.displayeach=100;
+        //console.log('inicializado memoria de video y cursor',hardware.systemvars.displayfrom,hardware.systemvars.cursoraddr);
 
         // vacia 24 pantallas 
-        for (let index = 0; index <32*24*24; index++) {
-            hardware.memory[hardware.systemvars.displayfrom + index]=0;   
-        }
+        hardware.processor.task=0;
+        for (let index = 0; index <32*24*24; index++) 
+            hardware.memory[hardware.systemvars.displayfrom + index]=0;
+
+        hardware.processor.task=1;
+        for (let index = 0; index <32*24*24; index++) 
+            hardware.memory[hardware.systemvars.displayfrom + index]=0;
+
+        hardware.processor.task=2;
+        for (let index = 0; index <32*24*24; index++) 
+            hardware.memory[hardware.systemvars.displayfrom + index]=0;
+        // comienza en edit
+        hardware.processor.task=1;
+
 
         // sube los tokens a memoria
         hardware.bus.pokearr(hardware.memorymap.fontpix,fonts);
@@ -997,12 +1113,15 @@
         window.onkeypress=onKeypressExecute;
         window.onkeydown=onKeydownExecute;
         window.onkeyup=onKeyupExecute;        
+
         
         var canvas=document.querySelector('canvas');
         var ctx=canvas.getContext('2d');
         ctx.webkitImageSmoothingEnabled = false;
         ctx.mozImageSmoothingEnabled = false;
         ctx.imageSmoothingEnabled=false;
+        canvas.onclick=onClickExecute;
         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+       // console.log('INDEXOF',textTokens.indexOf('cls'));
     </script>
 </html>
